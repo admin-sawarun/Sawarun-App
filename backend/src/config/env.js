@@ -40,7 +40,7 @@ export const env = {
     storageBucket: optional('FIREBASE_STORAGE_BUCKET'),
   },
 
-  /// Public origin of this server, e.g. https://savarun-api.onrender.com.
+  /// Public origin of this server, e.g. https://sawarun-app-production.up.railway.app.
   /// Used to build absolute URLs for uploaded images. Falls back to the
   /// request's own host when unset.
   publicUrl: optional('PUBLIC_URL').replace(/\/+$/, ''),

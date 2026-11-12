@@ -5,11 +5,11 @@ class AppConfig {
   AppConfig._();
 
   /// Explicit override, e.g. to point a debug build at the deployed server:
-  ///   flutter run --dart-define=BACKEND_URL=https://savarun-api.onrender.com
+  ///   flutter run --dart-define=BACKEND_URL=https://sawarun-app-production.up.railway.app
   static const String _override = String.fromEnvironment('BACKEND_URL');
 
   /// The deployed backend, used by release builds.
-  static const String _prodUrl = 'https://savarun-app.onrender.com';
+  static const String _prodUrl = 'https://sawarun-app-production.up.railway.app';
 
   /// Base URL of the Savarun Node/Express backend.
   ///
