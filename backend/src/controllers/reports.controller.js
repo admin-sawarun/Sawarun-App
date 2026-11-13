@@ -14,7 +14,8 @@ export { removePost };
 const REASONS = ['spam', 'harassment', 'nudity', 'hate', 'violence', 'fake', 'other'];
 
 const ReportBody = z.object({
-  targetType: z.enum(['user', 'post', 'message']),
+  // 'analysis' = an AI outfit report the user flags (Play AI-generated content policy).
+  targetType: z.enum(['user', 'post', 'message', 'analysis']),
   // For messages, targetId may be "<chatId>/<messageId>" or just the message id
   // (we then locate the chat via the reported user's threads).
   targetId: z.string().trim().min(1).max(300),
@@ -123,9 +124,10 @@ export const resolveReport = asyncHandler(async (req, res) => {
     } else if (report.targetType === 'message') {
       contentRemoved = await removeMessage(report.targetId, report.targetUid);
     } else {
-      throw ApiError.badRequest('A user report has no content to remove; use ban_user or dismiss');
+      throw ApiError.badRequest('This report has no content to remove; use dismiss' + (report.targetType === 'user' ? ' or ban_user' : ''));
     }
   } else if (action === 'ban_user') {
+    if (report.targetType === 'analysis') throw ApiError.badRequest('An AI result report has no user to ban; review it and dismiss');
     if (!report.targetUid) throw ApiError.badRequest('Report has no target user');
     try {
       await applyModeration(report.targetUid, 'ban', req.user.uid);

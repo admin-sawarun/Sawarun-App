@@ -4,6 +4,8 @@ import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../social/data/report_service.dart';
+import '../social/widgets/report_sheet.dart';
 import 'models/outfit_analysis.dart';
 import 'widgets/score_blob.dart';
 import 'widgets/style_dna_view.dart';
@@ -45,6 +47,20 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen> {
           icon: const Icon(Icons.close_rounded),
           onPressed: () => context.go(Routes.home),
         ),
+        actions: [
+          // Google Play's AI-generated content policy: users must be able to
+          // flag offensive or wrong AI output from inside the app.
+          IconButton(
+            tooltip: 'Report AI result',
+            icon: const Icon(Icons.outlined_flag_rounded),
+            onPressed: () => showReportSheet(
+              context,
+              targetType: ReportTarget.analysis,
+              targetId: a.imageUrl ?? 'analysis-${a.fitScore}',
+              targetUid: 'savarun-ai',
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         top: false,

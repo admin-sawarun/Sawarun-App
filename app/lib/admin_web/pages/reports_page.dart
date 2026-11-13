@@ -118,6 +118,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
                       'user' => Icons.person_outline_rounded,
                       'post' => Icons.image_outlined,
                       'message' => Icons.chat_bubble_outline_rounded,
+                      'analysis' => Icons.auto_awesome_outlined,
                       _ => Icons.flag_outlined,
                     },
                     size: 18,
@@ -186,17 +187,19 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
           child: const Text('Dismiss'),
         ),
         // The backend rejects remove_content for user reports.
-        if (r.targetType != 'user')
+        // AI result reports only need review + dismiss.
+        if (r.targetType != 'user' && r.targetType != 'analysis')
           TextButton(
             style: danger(),
             onPressed: () => _resolve(r, 'remove_content'),
             child: const Text('Remove content'),
           ),
-        TextButton(
-          style: danger(),
-          onPressed: () => _resolve(r, 'ban_user'),
-          child: const Text('Ban user'),
-        ),
+        if (r.targetType != 'analysis')
+          TextButton(
+            style: danger(),
+            onPressed: () => _resolve(r, 'ban_user'),
+            child: const Text('Ban user'),
+          ),
       ],
     );
   }

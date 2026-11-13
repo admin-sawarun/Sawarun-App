@@ -4,7 +4,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 
 /// What is being reported.
-enum ReportTarget { user, post, message }
+enum ReportTarget { user, post, message, analysis }
 
 /// Reasons accepted by POST /api/reports, with user-facing labels.
 const kReportReasons = <(String, String)>[

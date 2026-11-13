@@ -71,6 +71,7 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
         ReportTarget.user => 'Report user',
         ReportTarget.post => 'Report post',
         ReportTarget.message => 'Report message',
+        ReportTarget.analysis => 'Report AI result',
       };
 
   Future<void> _submit() async {

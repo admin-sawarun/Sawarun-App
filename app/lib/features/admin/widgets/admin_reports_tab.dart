@@ -233,12 +233,13 @@ class _ReportRowState extends ConsumerState<_ReportRow> {
                   _ActionButton(
                       label: 'Dismiss', onTap: () => _resolve('dismiss')),
                   // The backend rejects remove_content for user reports.
-                  if (r.targetType != 'user')
+                  if (r.targetType != 'user' && r.targetType != 'analysis')
                     _ActionButton(
                         label: 'Remove content',
                         danger: true,
                         onTap: () => _resolve('remove_content')),
-                  _ActionButton(
+                  if (r.targetType != 'analysis')
+                    _ActionButton(
                       label: 'Ban user',
                       danger: true,
                       onTap: () => _resolve('ban_user')),
