@@ -1,51 +1,79 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/auth/data/auth_providers.dart';
-import '../../features/auth/data/countries.dart';
 import '../widgets/common.dart';
 
-/// Centered "Savarun Admin" sign-in card: Google popup or phone OTP (web).
-/// The router moves on once [AdminSession] has checked the admin claim.
-class AdminLoginPage extends ConsumerStatefulWidget {
+/// Centered "Savarun Admin" sign-in card. Admins sign in with email and
+/// password only (Firebase Auth → Email/Password must be enabled). The router
+/// moves on once [AdminSession] has checked the admin claim.
+class AdminLoginPage extends StatefulWidget {
   const AdminLoginPage({super.key});
 
   @override
-  ConsumerState<AdminLoginPage> createState() => _AdminLoginPageState();
+  State<AdminLoginPage> createState() => _AdminLoginPageState();
 }
 
-class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
-  final _phone = TextEditingController();
-  final _otp = TextEditingController();
-  Country _country = kCountries.first;
-  ConfirmationResult? _confirmation;
+class _AdminLoginPageState extends State<AdminLoginPage> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
   bool _busy = false;
+  bool _showPassword = false;
   String? _error;
+  String? _info;
 
   @override
   void dispose() {
-    _phone.dispose();
-    _otp.dispose();
+    _email.dispose();
+    _password.dispose();
     super.dispose();
   }
 
-  String get _digits =>
-      _phone.text.replaceAll(RegExp(r'\D'), '').replaceFirst(RegExp(r'^0+'), '');
+  bool get _emailValid =>
+      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(_email.text.trim());
 
-  Future<void> _run(Future<void> Function() task) async {
+  String _message(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'invalid-credential':
+      case 'wrong-password':
+      case 'user-not-found':
+      case 'invalid-login-credentials':
+        return 'Wrong email or password.';
+      case 'invalid-email':
+        return 'Enter a valid email address.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'too-many-requests':
+        return 'Too many attempts. Wait a few minutes or reset your password.';
+      case 'operation-not-allowed':
+        return 'Email/password sign-in is not enabled in Firebase yet.';
+      case 'network-request-failed':
+        return 'No internet connection. Check your network and try again.';
+      default:
+        return e.message ?? e.code;
+    }
+  }
+
+  Future<void> _signIn() async {
+    if (!_emailValid) {
+      setState(() => _error = 'Enter a valid email address.');
+      return;
+    }
+    if (_password.text.isEmpty) {
+      setState(() => _error = 'Enter your password.');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
+      _info = null;
     });
     try {
-      await task();
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _email.text.trim(),
+        password: _password.text,
+      );
     } on FirebaseAuthException catch (e) {
-      if (e.code != 'popup-closed-by-user' &&
-          e.code != 'cancelled-popup-request') {
-        _error = e.message ?? e.code;
-      }
+      _error = _message(e);
     } catch (e) {
       _error = errorText(e);
     } finally {
@@ -53,43 +81,34 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
     }
   }
 
-  Future<void> _google() =>
-      _run(() => ref.read(authServiceProvider).signInWithGoogle());
-
-  Future<void> _sendCode() async {
-    final n = _digits.length;
-    final expected = _country.digits;
-    if (n == 0 ||
-        (expected != null && n != expected) ||
-        (expected == null && (n < 4 || n > 14))) {
-      setState(() => _error = expected != null
-          ? 'Enter a valid $expected-digit ${_country.name} number'
-          : 'Enter a valid phone number');
+  Future<void> _resetPassword() async {
+    if (!_emailValid) {
+      setState(() {
+        _error = 'Enter your admin email above, then tap "Forgot password?".';
+        _info = null;
+      });
       return;
     }
-    await _run(() async {
-      _confirmation = await ref
-          .read(authServiceProvider)
-          .sendOtpWeb('${_country.dialCode}$_digits');
+    setState(() {
+      _busy = true;
+      _error = null;
+      _info = null;
     });
-  }
-
-  Future<void> _verify() async {
-    final code = _otp.text.trim();
-    if (code.length < 6) {
-      setState(() => _error = 'Enter the 6-digit code');
-      return;
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: _email.text.trim());
+      // Same message whether or not the account exists (no account probing).
+      _info = 'If ${_email.text.trim()} is an admin account, a password reset '
+          'link has been sent to it.';
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') {
+        _info = 'If ${_email.text.trim()} is an admin account, a password reset '
+            'link has been sent to it.';
+      } else {
+        _error = _message(e);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    await _run(() =>
-        ref.read(authServiceProvider).confirmOtpWeb(_confirmation!, code));
-  }
-
-  Future<void> _pickCountry() async {
-    final picked = await showDialog<Country>(
-      context: context,
-      builder: (_) => const _CountryDialog(),
-    );
-    if (picked != null) setState(() => _country = picked);
   }
 
   @override
@@ -121,7 +140,7 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
                         offset: Offset(0, 16)),
                   ],
                 ),
-                child: _content(),
+                child: AutofillGroup(child: _content()),
               ),
             ),
           ),
@@ -131,7 +150,6 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
   }
 
   Widget _content() {
-    final otpStep = _confirmation != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -142,131 +160,105 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
-        const Text('Sign in with an admin account to continue.',
+        const Text('Sign in with your admin email and password.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13.5, color: AdminPalette.muted)),
         const SizedBox(height: 28),
-        if (!otpStep) ...[
-          OutlinedButton.icon(
-            onPressed: _busy ? null : _google,
-            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
-            icon: const _GoogleG(),
-            label: const Text('Continue with Google',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text('Email',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _email,
+          enabled: !_busy,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.email, AutofillHints.username],
+          textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(
+            hintText: 'admin@example.com',
+            prefixIcon: Icon(Icons.mail_outline_rounded, color: AdminPalette.muted),
           ),
-          const SizedBox(height: 22),
-          const Row(
-            children: [
-              Expanded(child: Divider()),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text('or use your phone',
-                    style: TextStyle(fontSize: 12, color: AdminPalette.muted)),
+        ),
+        const SizedBox(height: 16),
+        const Text('Password',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _password,
+          enabled: !_busy,
+          obscureText: !_showPassword,
+          autofillHints: const [AutofillHints.password],
+          onSubmitted: (_) => _signIn(),
+          decoration: InputDecoration(
+            hintText: 'Password',
+            prefixIcon:
+                const Icon(Icons.lock_outline_rounded, color: AdminPalette.muted),
+            suffixIcon: IconButton(
+              tooltip: _showPassword ? 'Hide password' : 'Show password',
+              icon: Icon(
+                _showPassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: AdminPalette.muted,
               ),
-              Expanded(child: Divider()),
-            ],
-          ),
-          const SizedBox(height: 22),
-          TextField(
-            controller: _phone,
-            enabled: !_busy,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(15),
-            ],
-            onSubmitted: (_) => _sendCode(),
-            decoration: InputDecoration(
-              hintText: 'Phone number',
-              prefixIcon: InkWell(
-                onTap: _busy ? null : _pickCountry,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 12, right: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_country.iso,
-                          style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AdminPalette.muted)),
-                      const SizedBox(width: 6),
-                      Text(_country.dialCode,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      const Icon(Icons.arrow_drop_down_rounded,
-                          color: AdminPalette.muted),
-                    ],
-                  ),
-                ),
-              ),
+              onPressed: () => setState(() => _showPassword = !_showPassword),
             ),
           ),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _busy ? null : _sendCode,
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-            child: const Text('Send verification code'),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _busy ? null : _resetPassword,
+            child: const Text('Forgot password?'),
           ),
-        ] else ...[
-          Text('Enter the 6-digit code sent to ${_country.dialCode} $_digits',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13.5, color: AdminPalette.inkSoft)),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _otp,
-            enabled: !_busy,
-            autofocus: true,
-            textAlign: TextAlign.center,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(
-                fontSize: 20, letterSpacing: 8, fontWeight: FontWeight.w600),
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(6),
-            ],
-            onSubmitted: (_) => _verify(),
-            decoration: const InputDecoration(hintText: '••••••'),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _busy ? null : _verify,
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-            child: const Text('Verify & sign in'),
-          ),
-          TextButton(
-            onPressed: _busy
-                ? null
-                : () => setState(() {
-                      _confirmation = null;
-                      _otp.clear();
-                      _error = null;
-                    }),
-            child: const Text('Use a different number'),
-          ),
-        ],
-        if (_busy) ...[
-          const SizedBox(height: 16),
-          const LinearProgressIndicator(minHeight: 2),
-        ],
+        ),
+        const SizedBox(height: 4),
+        FilledButton(
+          onPressed: _busy ? null : _signIn,
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+          child: _busy
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.2, color: Colors.white),
+                )
+              : const Text('Sign in'),
+        ),
         if (_error != null) ...[
           const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFDECEA),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(_error!,
-                style: const TextStyle(
-                    fontSize: 13, color: AdminPalette.danger)),
-          ),
+          _Notice(text: _error!, error: true),
+        ],
+        if (_info != null) ...[
+          const SizedBox(height: 16),
+          _Notice(text: _info!, error: false),
         ],
         const SizedBox(height: 20),
         const Text('Access is limited to accounts with the admin role.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 11.5, color: AdminPalette.muted)),
       ],
+    );
+  }
+}
+
+class _Notice extends StatelessWidget {
+  const _Notice({required this.text, required this.error});
+  final String text;
+  final bool error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: error ? const Color(0xFFFDECEA) : const Color(0xFFEAF7EE),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(text,
+          style: TextStyle(
+              fontSize: 13,
+              color: error ? AdminPalette.danger : const Color(0xFF1E7B3A))),
     );
   }
 }
@@ -294,89 +286,6 @@ class _Brand extends StatelessWidget {
                 color: Colors.white,
                 fontSize: 26,
                 fontWeight: FontWeight.w800)),
-      ),
-    );
-  }
-}
-
-/// Simple multi-colour "G" mark without bundling an image asset.
-class _GoogleG extends StatelessWidget {
-  const _GoogleG();
-
-  @override
-  Widget build(BuildContext context) {
-    return ShaderMask(
-      shaderCallback: (r) => const SweepGradient(colors: [
-        Color(0xFFEA4335),
-        Color(0xFFFBBC05),
-        Color(0xFF34A853),
-        Color(0xFF4285F4),
-        Color(0xFFEA4335),
-      ]).createShader(r),
-      child: const Text('G',
-          style: TextStyle(
-              fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
-    );
-  }
-}
-
-class _CountryDialog extends StatefulWidget {
-  const _CountryDialog();
-
-  @override
-  State<_CountryDialog> createState() => _CountryDialogState();
-}
-
-class _CountryDialogState extends State<_CountryDialog> {
-  String _q = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final q = _q.toLowerCase();
-    final list = kCountries
-        .where((c) =>
-            q.isEmpty ||
-            c.name.toLowerCase().contains(q) ||
-            c.dialCode.contains(q) ||
-            c.iso.toLowerCase() == q)
-        .toList();
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400, maxHeight: 520),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: TextField(
-                autofocus: true,
-                onChanged: (v) => setState(() => _q = v.trim()),
-                decoration: const InputDecoration(
-                  hintText: 'Search country or code',
-                  prefixIcon: Icon(Icons.search_rounded),
-                ),
-              ),
-            ),
-            const Divider(),
-            Expanded(
-              child: ListView.builder(
-                itemCount: list.length,
-                itemBuilder: (_, i) {
-                  final c = list[i];
-                  return ListTile(
-                    dense: true,
-                    leading: Text(c.iso,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: AdminPalette.muted)),
-                    title: Text(c.name),
-                    trailing: Text(c.dialCode),
-                    onTap: () => Navigator.pop(context, c),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
