@@ -24,9 +24,13 @@ const VisionSchema = z.object({
     .default([]),
   feedback: z.object({
     summary: z.string().default(''),
+    // The app shows "trend" as the Trend Pulse and "styleTips" behind the
+    // "Suggestions for You" button; zod drops keys not listed here.
+    trend: z.string().default(''),
     suggestions: z
       .array(z.object({ type: z.string().default('keep'), text: z.string() }))
       .default([]),
+    styleTips: z.array(z.string()).default([]),
   }),
 });
 
