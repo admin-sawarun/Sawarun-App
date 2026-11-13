@@ -44,11 +44,23 @@ export function createApp() {
   // Health check (no auth) — handy for uptime monitors & load balancers.
   app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
-  // Public pages (no auth): landing + legal pages linked from the store
-  // listings. Self-contained HTML with inline CSS only (no scripts), which
-  // helmet's default CSP allows.
+  // Marketing website (React + Vite, source in /website, built into
+  // public/web). It only uses same-origin module scripts and stylesheets plus
+  // Google Fonts, which helmet's default CSP allows. Keep this list in sync
+  // with the routes in website/src/App.jsx.
+  const WEB_DIR = join(PUBLIC_DIR, 'web');
+  const WEBSITE_ROUTES = ['/', '/features', '/how-it-works', '/for-brands', '/faq', '/about', '/contact'];
+  // Hashed bundles never change, so they can be cached for long; images for a week.
+  app.use('/web-assets', express.static(join(WEB_DIR, 'web-assets'), { maxAge: '1y', immutable: true }));
+  app.use('/site', express.static(join(WEB_DIR, 'site'), { maxAge: '7d' }));
+  app.get(WEBSITE_ROUTES, (_req, res) => {
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(join(WEB_DIR, 'index.html'));
+  });
+
+  // Legal pages linked from the store listings. Self-contained HTML with
+  // inline CSS only (no scripts), which helmet's default CSP allows.
   const page = (file) => (_req, res) => res.sendFile(join(PUBLIC_DIR, file));
-  app.get('/', page('index.html'));
   app.get('/privacy-policy', page('privacy-policy.html'));
   app.get('/terms', page('terms.html'));
   app.get('/account-deletion', page('account-deletion.html'));
