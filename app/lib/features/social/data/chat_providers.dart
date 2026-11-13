@@ -62,12 +62,15 @@ class ChatThread {
 
 class ChatMessage {
   const ChatMessage({
+    this.id = '',
     required this.senderId,
     required this.text,
     required this.imageUrl,
     required this.createdAt,
   });
 
+  /// Firestore doc id of the message (used when reporting it).
+  final String id;
   final String senderId;
   final String text;
 
@@ -77,8 +80,9 @@ class ChatMessage {
 
   bool get isImage => imageUrl != null && imageUrl!.isNotEmpty;
 
-  factory ChatMessage.fromDoc(Map<String, dynamic> d) {
+  factory ChatMessage.fromDoc(Map<String, dynamic> d, {String id = ''}) {
     return ChatMessage(
+      id: id,
       senderId: d['senderId'] ?? '',
       text: d['text'] ?? '',
       imageUrl: d['imageUrl'] as String?,
@@ -101,8 +105,9 @@ class ChatRepository {
   CollectionReference<Map<String, dynamic>> get _chats =>
       _db.collection('chats');
 
-  /// Open a thread in `pending` state. The recipient must accept before
-  /// either side can carry on messaging.
+  /// Create a thread in `pending` state. The recipient must accept before
+  /// either side can carry on messaging. This is the only place a thread is
+  /// created — the rules require status/requestedBy/participants on create.
   Future<void> sendRequest(String me, String other) {
     return _chats.doc(chatIdFor(me, other)).set({
       'participants': [me, other]..sort(),
@@ -110,7 +115,7 @@ class ChatRepository {
       'requestedBy': me,
       'lastMessage': '',
       'lastTime': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    });
   }
 
   Future<void> acceptRequest(String me, String other) {
@@ -134,11 +139,12 @@ class ChatRepository {
 
     final chatRef = _chats.doc(chatIdFor(me, other));
 
-    await chatRef.set({
-      'participants': [me, other]..sort(),
+    // Only refresh the preview on the existing (accepted) thread; threads are
+    // created exclusively by [sendRequest].
+    await chatRef.update({
       'lastMessage': hasImage && trimmed.isEmpty ? '📷 Photo' : trimmed,
       'lastTime': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    });
 
     await chatRef.collection('messages').add({
       'senderId': me,
@@ -155,7 +161,7 @@ class ChatRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) =>
-            snap.docs.map((d) => ChatMessage.fromDoc(d.data())).toList());
+            snap.docs.map((d) => ChatMessage.fromDoc(d.data(), id: d.id)).toList());
   }
 
   Stream<ChatThread?> thread(String chatId) {

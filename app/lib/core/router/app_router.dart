@@ -37,6 +37,7 @@ import '../../features/social/chat_screen.dart';
 import '../../features/profile/outfit_history_screen.dart';
 import '../../features/profile/settings_screen.dart';
 import '../../features/profile/edit_profile_screen.dart';
+import '../../features/profile/blocked_users_screen.dart';
 import '../../features/admin/admin_dashboard_screen.dart';
 
 /// App route names kept in one place to avoid typos.
@@ -71,6 +72,7 @@ class Routes {
   static const editProfile = '/edit-profile';
   static const phoneLogin = '/phone-login';
   static const admin = '/admin';
+  static const blockedUsers = '/blocked-users';
 }
 
 /// Locations a logged-out user is allowed to sit on.
@@ -145,6 +147,7 @@ final appRouter = GoRouter(
     GoRoute(path: Routes.outfitHistory, builder: (c, s) => const OutfitHistoryScreen()),
     GoRoute(path: Routes.settings, builder: (c, s) => const SettingsScreen()),
     GoRoute(path: Routes.editProfile, builder: (c, s) => const EditProfileScreen()),
+    GoRoute(path: Routes.blockedUsers, builder: (c, s) => const BlockedUsersScreen()),
     // Admin Dashboard (Flutter Web). The screen itself re-checks the admin
     // claim and bounces non-admins, so the route needs no special guard.
     GoRoute(path: Routes.admin, builder: (c, s) => const AdminDashboardScreen()),

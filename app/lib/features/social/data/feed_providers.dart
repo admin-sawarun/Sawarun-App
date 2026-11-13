@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
+import 'block_providers.dart';
 import 'follow_providers.dart';
 
 /// A shared outfit post in the home feed (Module 3) — also the source for the
@@ -107,6 +108,8 @@ final hasLikedProvider =
 final inspirationByStyleProvider =
     StreamProvider.family<List<OutfitPost>, String>((ref, style) {
   final me = FirebaseAuth.instance.currentUser?.uid;
+  // Hide posts from anyone I've blocked.
+  final blocked = ref.watch(blockedSetProvider);
   return FirebaseFirestore.instance
       .collection('posts')
       .where('style', isEqualTo: style)
@@ -115,7 +118,7 @@ final inspirationByStyleProvider =
       .snapshots()
       .map((snap) => snap.docs
           .map((d) => OutfitPost.fromDoc(d.id, d.data()))
-          .where((p) => p.authorUid != me)
+          .where((p) => p.authorUid != me && !blocked.contains(p.authorUid))
           .toList());
 });
 
@@ -128,7 +131,12 @@ final homeFeedProvider = StreamProvider<List<OutfitPost>>((ref) {
 
   // Rebuild the feed whenever the following list changes.
   final following = ref.watch(followingUidsProvider(me)).value ?? const [];
-  final authors = <String>{me, ...following}.take(30).toList();
+  // Blocked users never show up, even if a stale follow edge remains.
+  final blocked = ref.watch(blockedSetProvider);
+  final authors = <String>{me, ...following}
+      .where((uid) => !blocked.contains(uid))
+      .take(30)
+      .toList();
 
   return FirebaseFirestore.instance
       .collection('posts')
@@ -136,8 +144,10 @@ final homeFeedProvider = StreamProvider<List<OutfitPost>>((ref) {
       .orderBy('createdAt', descending: true)
       .limit(50)
       .snapshots()
-      .map((snap) =>
-          snap.docs.map((d) => OutfitPost.fromDoc(d.id, d.data())).toList());
+      .map((snap) => snap.docs
+          .map((d) => OutfitPost.fromDoc(d.id, d.data()))
+          .where((p) => !blocked.contains(p.authorUid))
+          .toList());
 });
 
 /// A single user's own posts — used on their profile grid.

@@ -8,7 +8,10 @@ import '../analysis/widgets/past_scores_strip.dart';
 import '../profile/data/profile_providers.dart';
 import '../wardrobe/data/wardrobe_models.dart';
 import '../wardrobe/data/wardrobe_providers.dart';
+import 'data/block_providers.dart';
 import 'data/follow_providers.dart';
+import 'data/report_service.dart';
+import 'widgets/report_sheet.dart';
 
 class OtherProfileScreen extends ConsumerWidget {
   const OtherProfileScreen({super.key, required this.uid});
@@ -17,10 +20,18 @@ class OtherProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(userByUidProvider(uid));
+    final me = ref.watch(currentUidProvider);
 
     return Scaffold(
       backgroundColor: AppColors.white,
-      appBar: AppBar(title: Text(profileAsync.value?.handle ?? 'Profile')),
+      appBar: AppBar(
+        title: Text(profileAsync.value?.handle ?? 'Profile'),
+        actions: [
+          if (me != null && me != uid)
+            _ProfileMenu(
+                me: me, uid: uid, name: profileAsync.value?.name ?? 'this user'),
+        ],
+      ),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
@@ -113,6 +124,22 @@ class _ActionButtons extends ConsumerWidget {
     // Viewing your own profile from search — hide follow/message.
     if (me == uid) return const SizedBox.shrink();
 
+    if (ref.watch(isBlockedProvider(uid))) {
+      return Column(
+        children: [
+          const Text('You blocked this user.',
+              style: TextStyle(color: AppColors.inkMuted)),
+          const SizedBox(height: 10),
+          OutlinedButton(
+            onPressed: me == null
+                ? null
+                : () => ref.read(blockRepoProvider).unblock(me, uid),
+            child: const Center(child: Text('Unblock')),
+          ),
+        ],
+      );
+    }
+
     return Row(
       children: [
         Expanded(
@@ -204,6 +231,95 @@ class _Stat extends StatelessWidget {
           Text(label, style: const TextStyle(fontSize: 12, color: AppColors.inkMuted)),
         ],
       ),
+    );
+  }
+}
+
+/// App-bar overflow menu on someone else's profile: Report and Block/Unblock.
+class _ProfileMenu extends ConsumerWidget {
+  const _ProfileMenu({required this.me, required this.uid, required this.name});
+  final String me;
+  final String uid;
+  final String name;
+
+  Future<void> _toggleBlock(
+      BuildContext context, WidgetRef ref, bool blocked) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final repo = ref.read(blockRepoProvider);
+    if (blocked) {
+      try {
+        await repo.unblock(me, uid);
+        messenger.showSnackBar(SnackBar(content: Text('$name unblocked')));
+      } catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text('Could not unblock: $e')));
+      }
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Block $name?'),
+        content: const Text(
+            "They won't appear in your feed, search or messages, and you "
+            "won't be able to chat with them. You'll also unfollow them. "
+            'You can unblock anytime in Settings.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await repo.block(me, uid);
+      messenger.showSnackBar(SnackBar(content: Text('$name blocked')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not block: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final blocked = ref.watch(isBlockedProvider(uid));
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert_rounded),
+      onSelected: (value) {
+        switch (value) {
+          case 'report':
+            showReportSheet(context,
+                targetType: ReportTarget.user, targetId: uid, targetUid: uid);
+          case 'block':
+            _toggleBlock(context, ref, blocked);
+        }
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(
+          value: 'report',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.flag_outlined),
+            title: Text('Report'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'block',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(blocked ? Icons.lock_open_rounded : Icons.block_rounded,
+                color: blocked ? null : AppColors.danger),
+            title: Text(blocked ? 'Unblock' : 'Block',
+                style: TextStyle(color: blocked ? null : AppColors.danger)),
+          ),
+        ),
+      ],
     );
   }
 }

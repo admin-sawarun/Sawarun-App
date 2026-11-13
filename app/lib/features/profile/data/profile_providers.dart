@@ -43,6 +43,16 @@ class UserProfile {
     return '@${uid.substring(0, uid.length < 6 ? uid.length : 6)}';
   }
 
+  /// Handle for another user's public doc: @username, else @name (letters and
+  /// digits only), else "@user" + the first 6 chars of their uid.
+  static String _publicHandle(
+      {String? username, required String name, required String uid}) {
+    if (username != null && username.isNotEmpty) return '@$username';
+    final slug = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_.]'), '');
+    if (slug.isNotEmpty && name != 'Savarun User') return '@$slug';
+    return '@user${uid.substring(0, uid.length < 6 ? uid.length : 6)}';
+  }
+
   static String _bio(Map<String, dynamic>? doc) =>
       (doc?['bio'] as String?)?.trim().isNotEmpty == true
           ? doc!['bio']
@@ -70,13 +80,16 @@ class UserProfile {
   /// Any user, built purely from their Firestore doc (for other profiles).
   factory UserProfile.fromDoc(String uid, Map<String, dynamic> doc) {
     final username = doc['username'] as String?;
+    final name = (doc['name'] as String?) ?? 'Savarun User';
     return UserProfile(
       uid: uid,
-      name: doc['name'] ?? 'Savarun User',
+      name: name,
       username: username,
-      handle: _handle(username: username, email: doc['email'], phone: doc['phone'], uid: uid),
-      email: doc['email'],
-      phone: doc['phone'],
+      // Email/phone are private (users/{uid}/private/contact), so other
+      // people's handles fall back to their name, then a uid-based handle.
+      handle: _publicHandle(username: username, name: name, uid: uid),
+      email: null,
+      phone: null,
       photoURL: doc['photoURL'],
       bio: _bio(doc),
       style: doc['style'],

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "cd .. && rules-test/node_modules/.bin/firebase emulators:exec --only firestore --project savarun-rules-test --config firebase.emulator.json \"node rules-test/chat.test.mjs\""
+    "test": "cd .. && rules-test/node_modules/.bin/firebase emulators:exec --only firestore --project savarun-rules-test --config firebase.emulator.json \"node rules-test/chat.test.mjs && node rules-test/users.test.mjs\""
   },
   "dependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",

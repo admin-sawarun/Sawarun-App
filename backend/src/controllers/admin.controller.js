@@ -69,16 +69,69 @@ async function computeTrendingStyles() {
 
 /* ─────────────── Listings for the dashboard ─────────────── */
 
+/**
+ * Resolve email/phone for a set of users. Order of precedence:
+ *   1. users/{uid}/private/contact  { email, phone }   (current schema)
+ *   2. top-level users/{uid}.email / .phone             (older docs)
+ *   3. Firebase Auth record email / phoneNumber          (only if still missing)
+ * @param {string[]} uids
+ * @param {Record<string, object>} [userDocs]  already-loaded users/{uid} data
+ * @returns {Promise<Record<string, {email: string|null, phone: string|null}>>}
+ */
+async function getContacts(uids, userDocs = {}) {
+  const contacts = {};
+  if (!uids.length) return contacts;
+
+  let snaps = [];
+  try {
+    snaps = await db.getAll(
+      ...uids.map((uid) => db.collection('users').doc(uid).collection('private').doc('contact'))
+    );
+  } catch (err) {
+    console.warn('[admin] contact lookup failed:', err.message);
+  }
+  const privateByUid = {};
+  for (const s of snaps) if (s.exists) privateByUid[s.ref.parent.parent.id] = s.data();
+
+  for (const uid of uids) {
+    const p = privateByUid[uid] || {};
+    const u = userDocs[uid] || {};
+    contacts[uid] = { email: p.email || u.email || null, phone: p.phone || u.phone || null };
+  }
+
+  // Auth fallback for anyone still missing both, batched 100 at a time.
+  const missing = uids.filter((uid) => !contacts[uid].email && !contacts[uid].phone);
+  for (let i = 0; i < missing.length; i += 100) {
+    try {
+      const { users } = await firebaseAuth.getUsers(missing.slice(i, i + 100).map((uid) => ({ uid })));
+      for (const au of users) {
+        contacts[au.uid] = {
+          email: contacts[au.uid].email || au.email || null,
+          phone: contacts[au.uid].phone || au.phoneNumber || null,
+        };
+      }
+    } catch (err) {
+      console.warn('[admin] auth contact fallback failed:', err.message);
+    }
+  }
+  return contacts;
+}
+
 /** GET /api/admin/users?limit=50 — all users with activity + moderation status. */
 export const listUsers = asyncHandler(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const snap = await db.collection('users').limit(limit).get();
+  const contacts = await getContacts(
+    snap.docs.map((d) => d.id),
+    Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]))
+  );
   const users = snap.docs.map((d) => {
     const u = d.data();
     return {
       uid: d.id,
       name: u.name || u.username || 'Savarun User',
-      email: u.email || null,
+      email: contacts[d.id]?.email || null,
+      phone: contacts[d.id]?.phone || null,
       photoURL: u.photoURL || null,
       style: u.style || null,
       status: u.status || 'active',
@@ -100,19 +153,21 @@ export const listBrands = asyncHandler(async (req, res) => {
   // brand. Look up each unique owner once.
   const ownerIds = [...new Set(brands.map((b) => b.ownerUid).filter(Boolean))];
   const owners = {};
-  await Promise.all(
-    ownerIds.map(async (uid) => {
-      const u = await db.collection('users').doc(uid).get();
-      if (u.exists) {
-        const data = u.data();
-        owners[uid] = {
-          name: data.name || data.username || 'Savarun User',
-          email: data.email || null,
-          phone: data.phone || null,
-        };
-      }
-    })
-  );
+  if (ownerIds.length) {
+    const userSnaps = await db.getAll(...ownerIds.map((uid) => db.collection('users').doc(uid)));
+    const userDocs = {};
+    for (const s of userSnaps) if (s.exists) userDocs[s.id] = s.data();
+    const contacts = await getContacts(ownerIds, userDocs);
+    for (const uid of ownerIds) {
+      const data = userDocs[uid];
+      if (!data && !contacts[uid]?.email && !contacts[uid]?.phone) continue;
+      owners[uid] = {
+        name: data?.name || data?.username || 'Savarun User',
+        email: contacts[uid]?.email || null,
+        phone: contacts[uid]?.phone || null,
+      };
+    }
+  }
 
   const withOwners = brands.map((b) => ({
     ...b,
@@ -222,12 +277,19 @@ export const moderateUser = asyncHandler(async (req, res) => {
   if (!parsed.success) throw ApiError.badRequest('action must be ban|suspend|verify|reinstate');
 
   const { uid } = req.params;
-  const { action } = parsed.data;
+  const status = await applyModeration(uid, parsed.data.action, req.user.uid);
+  res.json({ ok: true, data: { uid, status } });
+});
 
+/**
+ * Apply a moderation action to a user (shared by the moderate endpoint and
+ * report resolution). Returns the new profile status.
+ */
+export async function applyModeration(uid, action, byUid) {
   // Reflect status in Firestore profile.
   const statusMap = { ban: 'banned', suspend: 'suspended', verify: 'verified', reinstate: 'active' };
   await db.collection('users').doc(uid).set(
-    { status: statusMap[action], moderatedBy: req.user.uid, moderatedAt: admin.firestore.FieldValue.serverTimestamp() },
+    { status: statusMap[action], moderatedBy: byUid, moderatedAt: admin.firestore.FieldValue.serverTimestamp() },
     { merge: true }
   );
 
@@ -238,9 +300,8 @@ export const moderateUser = asyncHandler(async (req, res) => {
   } else if (action === 'reinstate') {
     await firebaseAuth.updateUser(uid, { disabled: false });
   }
-
-  res.json({ ok: true, data: { uid, status: statusMap[action] } });
-});
+  return statusMap[action];
+}
 
 /** POST /api/admin/users/:uid/set-admin  body: { admin: boolean } — grant/revoke dashboard access. */
 export const setUserAdmin = asyncHandler(async (req, res) => {

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../data/feed_providers.dart';
+import '../data/report_service.dart';
+import 'report_sheet.dart';
 
 /// The home feed of outfit posts from people you follow (Module 3).
 /// Renders nothing until there's at least one post, so an empty feed doesn't
@@ -107,6 +110,8 @@ class _PostCard extends ConsumerWidget {
                       ),
                     ),
                   ),
+                if (post.authorUid != FirebaseAuth.instance.currentUser?.uid)
+                  _PostMenu(post: post),
               ],
             ),
           ),
@@ -177,6 +182,36 @@ class _LikeButton extends ConsumerWidget {
         '${post.likes}',
         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
       ),
+    );
+  }
+}
+
+/// Overflow menu on someone else's post — currently just "Report".
+class _PostMenu extends StatelessWidget {
+  const _PostMenu({required this.post});
+  final OutfitPost post;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_horiz_rounded, color: AppColors.inkMuted),
+      padding: EdgeInsets.zero,
+      onSelected: (_) => showReportSheet(
+        context,
+        targetType: ReportTarget.post,
+        targetId: post.id,
+        targetUid: post.authorUid,
+      ),
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'report',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.flag_outlined),
+            title: Text('Report post'),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -3,6 +3,17 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
+/// A failed backend call. Carries the HTTP status so callers can react to
+/// specific cases (e.g. 401 when a sensitive action needs a fresh login).
+class ApiException implements Exception {
+  const ApiException(this.message, this.statusCode);
+  final String message;
+  final int statusCode;
+
+  @override
+  String toString() => 'Exception: $message';
+}
+
 /// Thin helper for authenticated JSON calls to the Savarun Node backend.
 ///
 /// Every backend route sits behind `requireAuth`, so each call carries the
@@ -42,6 +53,11 @@ class ApiClient {
     return _decode(res);
   }
 
+  Future<Map<String, dynamic>> delete(String url) async {
+    final res = await http.delete(Uri.parse(url), headers: await _headers());
+    return _decode(res);
+  }
+
   Future<Map<String, String>> _headers() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Not signed in');
@@ -49,11 +65,20 @@ class ApiClient {
   }
 
   Map<String, dynamic> _decode(http.Response res) {
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    Map<String, dynamic>? json;
+    try {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map<String, dynamic>) json = decoded;
+    } on FormatException {
+      json = null;
+    }
     // 2xx are all success (POSTs that create return 201).
     final ok = res.statusCode >= 200 && res.statusCode < 300;
-    if (!ok || json['ok'] != true) {
-      throw Exception(json['error'] ?? 'Request failed (${res.statusCode})');
+    if (!ok || json == null || json['ok'] != true) {
+      throw ApiException(
+        (json?['error'] ?? 'Request failed (${res.statusCode})').toString(),
+        res.statusCode,
+      );
     }
     return json;
   }

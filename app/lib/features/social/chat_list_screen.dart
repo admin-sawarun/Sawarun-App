@@ -6,6 +6,7 @@ import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../auth/data/auth_providers.dart';
 import '../profile/data/profile_providers.dart';
+import 'data/block_providers.dart';
 import 'data/chat_providers.dart';
 
 class ChatListScreen extends ConsumerWidget {
@@ -15,6 +16,7 @@ class ChatListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(authStateProvider).value?.uid;
     final threadsAsync = ref.watch(chatThreadsProvider);
+    final blocked = ref.watch(blockedSetProvider);
 
     return Scaffold(
       backgroundColor: AppColors.white,
@@ -22,7 +24,11 @@ class ChatListScreen extends ConsumerWidget {
       body: threadsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('$e', textAlign: TextAlign.center))),
-        data: (threads) {
+        data: (all) {
+          // Conversations with people I've blocked are hidden.
+          final threads = me == null
+              ? all
+              : all.where((t) => !blocked.contains(t.otherUid(me))).toList();
           if (threads.isEmpty || me == null) {
             return const Center(
               child: Padding(

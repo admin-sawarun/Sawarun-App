@@ -132,6 +132,104 @@ await check('both participants can read the messages', async () => {
   await assertSucceeds(getDocs(msgs(as(BOB))));
 });
 
+// ── 4b. Request-flow abuse ──
+await check('the requester cannot accept their own request', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'chats', `${ALICE}_${MALLORY}`), {
+      participants: [ALICE, MALLORY], status: 'pending', requestedBy: MALLORY,
+    });
+  });
+  await assertFails(
+    updateDoc(doc(as(MALLORY), 'chats', `${ALICE}_${MALLORY}`), { status: 'accepted' })
+  );
+});
+
+await check('nobody can message a pending thread', async () => {
+  await assertFails(
+    addDoc(collection(as(MALLORY), 'chats', `${ALICE}_${MALLORY}`, 'messages'), {
+      senderId: MALLORY, text: 'spam', createdAt: serverTimestamp(),
+    })
+  );
+});
+
+await check('the requester cannot put text in lastMessage while pending', async () => {
+  await assertFails(
+    updateDoc(doc(as(MALLORY), 'chats', `${ALICE}_${MALLORY}`), { lastMessage: 'spam' })
+  );
+});
+
+await check('the recipient can decline by status', async () => {
+  await assertSucceeds(
+    updateDoc(doc(as(ALICE), 'chats', `${ALICE}_${MALLORY}`), { status: 'declined' })
+  );
+});
+
+await check('participants cannot be changed', async () => {
+  await assertFails(updateDoc(chatRef(as(ALICE)), { participants: [ALICE, MALLORY] }));
+});
+
+await check('requestedBy cannot be changed', async () => {
+  await assertFails(updateDoc(chatRef(as(ALICE)), { requestedBy: BOB }));
+});
+
+await check('sendMessage-style update on an accepted thread works', async () => {
+  await assertSucceeds(
+    setDoc(chatRef(as(ALICE)), {
+      participants: [ALICE, BOB], lastMessage: 'hi', lastTime: serverTimestamp(),
+    }, { merge: true })
+  );
+});
+
+await check('a thread id must match the sorted participants', async () => {
+  await assertFails(
+    setDoc(doc(as(BOB), 'chats', `${BOB}_${MALLORY}x`), {
+      participants: [BOB, MALLORY], status: 'pending', requestedBy: BOB,
+    })
+  );
+  await assertFails(
+    setDoc(doc(as(MALLORY), 'chats', `${MALLORY}_${BOB}`), {
+      participants: [MALLORY, BOB], status: 'pending', requestedBy: MALLORY,
+    })
+  );
+});
+
+await check('a thread needs two distinct participants', async () => {
+  await assertFails(
+    setDoc(doc(as(BOB), 'chats', `${BOB}_${BOB}`), {
+      participants: [BOB, BOB], status: 'pending', requestedBy: BOB,
+    })
+  );
+});
+
+await check('a thread cannot be created already accepted', async () => {
+  await assertFails(
+    setDoc(doc(as(BOB), 'chats', `${BOB}_${MALLORY}`), {
+      participants: [BOB, MALLORY], status: 'accepted', requestedBy: BOB,
+    })
+  );
+});
+
+await check('sendMessage cannot create a thread (no status)', async () => {
+  await assertFails(
+    setDoc(doc(as(BOB), 'chats', `${BOB}_${MALLORY}`), {
+      participants: [BOB, MALLORY], lastMessage: 'hi', lastTime: serverTimestamp(),
+    }, { merge: true })
+  );
+});
+
+await check('legacy threads (no status) can still be messaged', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'chats', `${BOB}_${MALLORY}`), {
+      participants: [BOB, MALLORY], lastMessage: 'old',
+    });
+  });
+  await assertSucceeds(
+    addDoc(collection(as(BOB), 'chats', `${BOB}_${MALLORY}`, 'messages'), {
+      senderId: BOB, text: 'still here', createdAt: serverTimestamp(),
+    })
+  );
+});
+
 // ── 5. Declining (deletes the thread so it can be re-sent) ──
 await check('an outsider cannot delete the thread', async () => {
   await assertFails(deleteDoc(chatRef(as(MALLORY))));

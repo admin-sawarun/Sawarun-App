@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_assets.dart';
+import '../../core/legal/legal_links.dart';
 import '../../core/theme/app_colors.dart';
 import 'data/auth_providers.dart';
 
@@ -83,11 +84,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         _busy ? null : () => context.push(Routes.phoneLogin),
                   ),
                   const Spacer(flex: 3),
-                  const Text(
-                    'By continuing you agree to our Terms & Privacy Policy',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: AppColors.inkMuted),
-                  ),
+                  const _LegalFooter(),
                   const SizedBox(height: 16),
                 ],
               ),
@@ -130,6 +127,43 @@ class _AuthButton extends StatelessWidget {
           Text(label),
         ],
       ),
+    );
+  }
+}
+
+/// "By continuing you agree to our Terms & Privacy Policy" with both
+/// document names opening the backend-hosted pages in an in-app browser.
+class _LegalFooter extends StatelessWidget {
+  const _LegalFooter();
+
+  static const _muted = TextStyle(fontSize: 12, color: AppColors.inkMuted);
+  static const _link = TextStyle(
+    fontSize: 12,
+    color: AppColors.ink,
+    fontWeight: FontWeight.w600,
+    decoration: TextDecoration.underline,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    Widget link(String label, String url) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => LegalLinks.open(context, url),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(label, style: _link),
+          ),
+        );
+
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        const Text('By continuing you agree to our ', style: _muted),
+        link('Terms', LegalLinks.terms),
+        const Text(' & ', style: _muted),
+        link('Privacy Policy', LegalLinks.privacyPolicy),
+      ],
     );
   }
 }

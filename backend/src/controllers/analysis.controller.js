@@ -6,7 +6,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { analyzeOutfitImage } from '../services/openaiVision.service.js';
 import { getWeights, computeFitScore } from '../services/fitScore.service.js';
 import { validateVisionResult, normalizeStyleDna } from '../services/analysisNormalizer.js';
-import { storeUpload, isAbsolute } from '../services/storage.service.js';
+import { storeUpload, isAbsolute, userFolder } from '../services/storage.service.js';
 
 /**
  * POST /api/analysis  (multipart, field "image")
@@ -23,7 +23,7 @@ export const analyzeOutfit = asyncHandler(async (req, res) => {
   const dataUrl = `data:${req.file.mimetype || 'image/jpeg'};base64,${base64}`;
 
   // Persist the image (local /uploads or Firebase Storage) for history/display.
-  let imageUrl = await storeUpload(req.file, 'outfits');
+  let imageUrl = await storeUpload(req.file, userFolder(req.user.uid, 'outfits'));
   if (!isAbsolute(imageUrl)) {
     const origin = env.publicUrl || `${req.protocol}://${req.get('host')}`;
     imageUrl = `${origin}${imageUrl}`;

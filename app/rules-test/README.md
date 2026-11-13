@@ -1,8 +1,9 @@
 # Firestore rules tests
 
 Runs `app/firestore.rules` against the Firestore emulator and asserts what each
-role can and cannot do — currently the chat request flow (send / accept /
-decline / message) and the reads an outsider must never get.
+role can and cannot do: `chat.test.mjs` covers the chat request flow (send / accept /
+decline / message); `users.test.mjs` covers profiles (allowed fields), the
+private contact doc, blocks, follows, outfit history, reports and posts.
 
 ```bash
 cd app/rules-test

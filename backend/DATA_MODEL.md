@@ -10,7 +10,7 @@ Collections the backend reads/writes. The Flutter app shares this same database
   stylePreferences: ["Streetwear", ...],
   wardrobePublic: bool,
   status: "active" | "banned" | "suspended" | "verified",   // set by admin
-  lastActiveAt: timestamp,        // used for Daily Active Users
+  lastActiveAt: timestamp,        // Daily Active Users; set by requireAuth (server timestamp, ≤ once/hour/uid)
   followersCount, followingCount
 }
 ```
@@ -59,6 +59,36 @@ Collections the backend reads/writes. The Flutter app shares this same database
 ```
 { productId, brandId, userId, at }
 ```
+
+## `reports/{autoId}`  ← written by `POST /api/reports`, resolved by admin
+```
+{
+  reporterUid,                    // null after the reporter deletes their account (reporterDeleted: true)
+  targetType: "user" | "post" | "message",
+  targetId,                       // uid | postId | "<chatId>/<messageId>"
+  targetUid,                      // the reported user
+  reason: "spam" | "harassment" | "nudity" | "hate" | "violence" | "fake" | "other",
+  details, status: "open" | "resolved", createdAt,
+  action: "dismiss" | "remove_content" | "ban_user", resolvedBy, resolvedAt
+}
+```
+
+## Social collections (written by the app; deleted by `DELETE /api/users/me`)
+```
+posts/{postId}           → { authorUid, authorName, authorPhoto, imageUrl, likes, ... }
+postLikes/{postId}_{uid} → { postId, uid, at }
+follows/{follower}_{followee} → { followerUid, followingUid, createdAt }
+chats/{chatId}           → { participants: [uid, uid], status, ... }
+chats/{chatId}/messages/{id} → { senderId, text, imageUrl?, createdAt }
+```
+
+## Storage layout
+New uploads go under per-user folders so account deletion can wipe them by prefix:
+```
+users/{uid}/uploads/<file>    ← POST /api/uploads, /api/uploads/bulk
+users/{uid}/outfits/<file>    ← POST /api/analysis
+```
+(Older files in `uploads/` / `outfits/` are deleted individually via the URLs stored in Firestore.)
 
 ## `config/...`
 ```

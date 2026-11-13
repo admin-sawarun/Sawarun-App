@@ -6,12 +6,53 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
 
+    // Keys written by this request (create: all keys; update: changed keys).
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
     // ── User profiles ──
+    // Public profile only. Email / phone live in users/{uid}/private/contact.
+    // status, verified, banned, role/admin, followers/following and
+    // lastActiveAt are server-only (Admin SDK bypasses these rules).
     match /users/{uid} {
-      // Any signed-in user can view a profile; only the owner edits it.
       allow read: if isSignedIn();
-      allow create, update: if isOwner(uid);
+
+      // First-login doc written by AuthService._ensureUserDoc.
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+             'uid', 'name', 'photoURL', 'bio', 'style', 'wardrobePublic',
+             'followers', 'following', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.get('followers', 0) == 0
+        && request.resource.data.get('following', 0) == 0;
+
+      // Profile edits: ProfileRepository.updateProfile / setPhotoURL /
+      // setWardrobePublic.
+      allow update: if isOwner(uid)
+        && changedKeys().hasOnly([
+             'name', 'bio', 'username', 'style', 'photoURL', 'wardrobePublic'])
+        && (!('wardrobePublic' in changedKeys())
+            || request.resource.data.wardrobePublic is bool);
+
       allow delete: if false;
+
+      // Private contact details — owner only.
+      match /private/{docId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && docId == 'contact'
+          && request.resource.data.keys().hasOnly(['email', 'phone', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      // Users this user has blocked. Doc id = blocked uid; body = {createdAt}.
+      match /blocked/{otherUid} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && otherUid != uid
+          && request.resource.data.keys().hasOnly(['createdAt']);
+      }
 
       // Wardrobe items: owner has full access; others can read only when
       // the owner's wardrobe is public.
@@ -27,78 +68,115 @@ service cloud.firestore {
         allow read, write: if isOwner(uid);
       }
 
-      // Outfit History — the analyses the backend saves. The owner always
-      // reads their own; others only when the profile's wardrobe is public,
-      // which is what puts past Fit Scores on a public profile.
-      // Writes come from the backend (Admin SDK), which bypasses these rules.
+      // Outfit History — the analyses (and Fit Scores) the backend saves.
+      // Owner always reads; others only when the wardrobe is public.
+      // The client never writes it: all writes come from the backend.
       match /outfitHistory/{docId} {
         allow read: if isOwner(uid)
           || (isSignedIn()
               && get(/databases/$(database)/documents/users/$(uid)).data.wardrobePublic == true);
-        allow write: if isOwner(uid);
+        allow write: if false;
       }
     }
 
     // ── Outfit posts (the home feed + inspiration grid) ──
-    // Anyone signed in can read; you may only create/delete your own posts.
-    // The `likes` counter is only ever written by the backend (Admin SDK),
-    // which bypasses these rules — clients can't inflate it.
+    // The `likes` counter is only ever written by the backend.
     match /posts/{postId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn()
-        && request.resource.data.authorUid == request.auth.uid;
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.get('likes', 0) == 0;
       allow update: if false;
       allow delete: if isSignedIn()
         && resource.data.authorUid == request.auth.uid;
     }
 
-    // Like markers (doc id `${postId}_${uid}`). Readable so the UI can show
-    // whether you've liked a post; writes go through the backend.
+    // Like markers (doc id `${postId}_${uid}`). Writes go through the backend.
     match /postLikes/{likeId} {
       allow read: if isSignedIn();
       allow write: if false;
     }
 
-    // ── Follows (edges: doc id `${followerUid}_${followingUid}`) ──
+    // ── Follows (doc id `${followerUid}_${followingUid}`, FollowRepository) ──
     match /follows/{edgeId} {
       allow read: if isSignedIn();
-      // You may only create/delete edges where YOU are the follower.
-      allow create: if isSignedIn() && request.resource.data.followerUid == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['followerUid', 'followingUid', 'createdAt'])
+        && request.resource.data.followerUid == request.auth.uid
+        && request.resource.data.followingUid is string
+        && request.resource.data.followingUid != request.auth.uid
+        && edgeId == request.auth.uid + '_' + request.resource.data.followingUid;
       allow delete: if isSignedIn() && resource.data.followerUid == request.auth.uid;
       allow update: if false;
     }
 
-    // ── Chats (1-on-1) ──
-    function isChatMember(chatId) {
-      let chat = get(/databases/$(database)/documents/chats/$(chatId));
-      return chat != null && request.auth.uid in chat.data.participants;
+    // ── Chats (1-on-1, id = sorted uids joined by '_', ChatRepository.chatIdFor) ──
+    // Flow: requester creates {status:'pending', requestedBy}; the other
+    // participant accepts (status -> 'accepted') or declines (deletes the
+    // thread, or sets 'declined'). Messages only once accepted. Threads from
+    // before the request flow have no status and count as accepted.
+    function chatOpen(data) {
+      return !('status' in data) || data.status == 'accepted';
     }
 
     match /chats/{chatId} {
-      // `resource == null` covers the thread not existing yet: the app watches
-      // the doc before any chat request is sent, and without this the listener
-      // errors instead of reporting "no thread".
+      // `resource == null`: the app watches the doc before a request exists.
       allow read: if isSignedIn()
         && (resource == null || request.auth.uid in resource.data.participants);
+
       allow create: if isSignedIn()
-        && request.auth.uid in request.resource.data.participants;
+        && request.resource.data.keys().hasOnly(
+             ['participants', 'status', 'requestedBy', 'lastMessage', 'lastTime'])
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants[0] < request.resource.data.participants[1]
+        && request.auth.uid in request.resource.data.participants
+        && chatId == request.resource.data.participants[0] + '_' + request.resource.data.participants[1]
+        && request.resource.data.status == 'pending'
+        && request.resource.data.requestedBy == request.auth.uid
+        && request.resource.data.get('lastMessage', '') == '';
+
       allow update: if isSignedIn()
-        && request.auth.uid in resource.data.participants;
+        && request.auth.uid in resource.data.participants
+        && changedKeys().hasOnly(['status', 'lastMessage', 'lastTime'])
+        && (
+          // Recipient answers a pending request.
+          ('status' in changedKeys()
+            && resource.data.get('status', '') == 'pending'
+            && request.resource.data.status in ['accepted', 'declined']
+            && request.auth.uid != resource.data.get('requestedBy', ''))
+          // Activity on an open thread (sendMessage).
+          || (!('status' in changedKeys()) && chatOpen(resource.data))
+          // Requester re-sending a pending request (no message text).
+          || (!('status' in changedKeys())
+              && resource.data.get('status', '') == 'pending'
+              && request.resource.data.get('lastMessage', '') == '')
+        );
+
       // Declining a chat request deletes the thread so it can be re-sent.
       allow delete: if isSignedIn()
         && request.auth.uid in resource.data.participants;
 
       match /messages/{msgId} {
-        allow read: if isSignedIn() && isChatMember(chatId);
+        function chat() {
+          return get(/databases/$(database)/documents/chats/$(chatId)).data;
+        }
+        allow read: if isSignedIn() && request.auth.uid in chat().participants;
         allow create: if isSignedIn()
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'imageUrl', 'createdAt'])
           && request.resource.data.senderId == request.auth.uid
-          && isChatMember(chatId);
+          && request.auth.uid in chat().participants
+          && chatOpen(chat());
+        allow update, delete: if false;
       }
     }
 
-    // ── Brands & products ──
-    // Submissions and approvals go through the backend (Admin SDK), which
-    // bypasses these rules. Direct client access is read-only.
+    // ── Reports — written by the backend only ──
+    match /reports/{id} {
+      allow read, write: if false;
+    }
+
+    // ── Brands & products — writes go through the backend ──
     match /brands/{id} {
       allow read: if isSignedIn();
       allow write: if false;

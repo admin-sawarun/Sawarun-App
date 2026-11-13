@@ -125,6 +125,69 @@ class AdminProduct {
       );
 }
 
+class AdminReport {
+  const AdminReport({
+    required this.id,
+    required this.targetType,
+    required this.targetId,
+    required this.targetUid,
+    required this.reason,
+    required this.details,
+    required this.reporterUid,
+    required this.status,
+    required this.createdAt,
+    required this.targetName,
+    required this.reporterName,
+    required this.resolution,
+  });
+  final String id;
+  final String targetType;
+  final String targetId;
+  final String targetUid;
+  final String reason;
+  final String? details;
+  final String reporterUid;
+  final String status;
+  final DateTime? createdAt;
+
+  /// Optional display names the backend may attach.
+  final String? targetName;
+  final String? reporterName;
+
+  /// The action taken, on resolved reports (if the backend returns it).
+  final String? resolution;
+
+  factory AdminReport.fromJson(Map<String, dynamic> d) => AdminReport(
+        id: (d['id'] ?? '').toString(),
+        targetType: (d['targetType'] ?? '').toString(),
+        targetId: (d['targetId'] ?? '').toString(),
+        targetUid: (d['targetUid'] ?? '').toString(),
+        reason: (d['reason'] ?? 'other').toString(),
+        details: d['details'] as String?,
+        reporterUid: (d['reporterUid'] ?? '').toString(),
+        status: (d['status'] ?? 'open').toString(),
+        createdAt: _parseTime(d['createdAt']),
+        targetName: (d['targetName'] ?? d['targetUserName']) as String?,
+        reporterName: d['reporterName'] as String?,
+        resolution: (d['action'] ?? d['resolution']) as String?,
+      );
+}
+
+/// Accepts ISO strings, epoch millis, or Firestore `{_seconds}` / `{seconds}`
+/// maps — whichever shape the backend serialises timestamps to.
+DateTime? _parseTime(dynamic v) {
+  if (v == null) return null;
+  if (v is String) return DateTime.tryParse(v)?.toLocal();
+  if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
+  if (v is Map) {
+    final s = v['_seconds'] ?? v['seconds'];
+    if (s is num) {
+      return DateTime.fromMillisecondsSinceEpoch((s * 1000).round());
+    }
+  }
+  return null;
+}
+
 /* ── Providers ── */
 
 final adminAnalyticsProvider =
@@ -163,6 +226,16 @@ final adminFitWeightsProvider =
   return data.map((k, v) => MapEntry(k, (v ?? 0) as num));
 });
 
+/// Reports for the moderation queue, by status ('open' | 'resolved').
+final adminReportsProvider = FutureProvider.autoDispose
+    .family<List<AdminReport>, String>((ref, status) async {
+  const client = ApiClient();
+  final json = await client.get(_admin('/reports?status=$status'));
+  return (json['data'] as List)
+      .map((r) => AdminReport.fromJson(r as Map<String, dynamic>))
+      .toList();
+});
+
 final adminRepoProvider = Provider((ref) => const AdminRepository());
 
 class AdminRepository {
@@ -180,6 +253,14 @@ class AdminRepository {
 
   Future<void> setProductHidden(String id, bool hidden) => const ApiClient()
       .patch(_admin('/products/$id/visibility'), {'hidden': hidden});
+
+  /// Show this (approved) brand in the Shop's Featured Brand slot.
+  Future<void> setFeaturedBrand(String brandId) => const ApiClient()
+      .put(_admin('/featured-brand'), {'brandId': brandId});
+
+  /// Resolve a report: 'dismiss' | 'remove_content' | 'ban_user'.
+  Future<void> resolveReport(String id, String action) => const ApiClient()
+      .post(_admin('/reports/$id/resolve'), {'action': action});
 
   Future<void> saveFitWeights(Map<String, num> weights) =>
       const ApiClient().put(_admin('/fit-weights'), weights);

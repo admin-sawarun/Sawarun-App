@@ -8,6 +8,10 @@ import { apiLimiter } from './middleware/rateLimit.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
 import { UPLOAD_DIR } from './middleware/upload.js';
 import apiRoutes from './routes/index.js';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 export function createApp() {
   const app = express();
@@ -39,6 +43,16 @@ export function createApp() {
 
   // Health check (no auth) — handy for uptime monitors & load balancers.
   app.get('/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
+
+  // Public pages (no auth): landing + legal pages linked from the store
+  // listings. Self-contained HTML with inline CSS only (no scripts), which
+  // helmet's default CSP allows.
+  const page = (file) => (_req, res) => res.sendFile(join(PUBLIC_DIR, file));
+  app.get('/', page('index.html'));
+  app.get('/privacy-policy', page('privacy-policy.html'));
+  app.get('/terms', page('terms.html'));
+  app.get('/account-deletion', page('account-deletion.html'));
+  app.get('/child-safety', page('child-safety.html'));
 
   // All API endpoints live under /api and share the general rate limiter.
   app.use('/api', apiLimiter, apiRoutes);

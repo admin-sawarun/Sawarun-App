@@ -1,6 +1,6 @@
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { storeUpload, isAbsolute } from "../services/storage.service.js";
+import { storeUpload, isAbsolute, userFolder } from "../services/storage.service.js";
 
 /**
  * With the local driver, storeUpload may return a relative "/uploads/…" URL
@@ -15,7 +15,7 @@ function absolutize(req, url) {
 /** POST /api/uploads — single image (field name: "image"). */
 export const uploadSingle = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest("No image file provided");
-  const url = absolutize(req, await storeUpload(req.file));
+  const url = absolutize(req, await storeUpload(req.file, userFolder(req.user.uid, "uploads")));
   res.status(201).json({
     ok: true,
     url,
@@ -31,7 +31,7 @@ export const uploadMultiple = asyncHandler(async (req, res) => {
   }
   const files = await Promise.all(
     req.files.map(async (f) => ({
-      url: absolutize(req, await storeUpload(f)),
+      url: absolutize(req, await storeUpload(f, userFolder(req.user.uid, "uploads"))),
       filename: f.filename,
       size: f.size,
     }))

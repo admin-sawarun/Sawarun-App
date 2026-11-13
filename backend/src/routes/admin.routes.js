@@ -15,6 +15,7 @@ import {
   moderateUser,
   setUserAdmin,
 } from '../controllers/admin.controller.js';
+import { listReports, resolveReport } from '../controllers/reports.controller.js';
 
 const router = Router();
 
@@ -37,5 +38,9 @@ router.put('/fit-weights', updateFitWeights);
 
 router.post('/users/:uid/moderate', moderateUser);
 router.post('/users/:uid/set-admin', setUserAdmin);
+
+// Content moderation queue (user reports).
+router.get('/reports', listReports);
+router.post('/reports/:id/resolve', resolveReport);
 
 export default router;

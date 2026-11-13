@@ -20,3 +20,16 @@ export const aiLimiter = rateLimit({
   legacyHeaders: false,
   message: { ok: false, error: 'Too many analysis requests, please wait a moment.' },
 });
+
+/**
+ * Limiter for user reports (abuse/spam protection). Runs after requireAuth,
+ * so it is keyed per signed-in user rather than per IP.
+ */
+export const reportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.uid || req.ip,
+  message: { ok: false, error: 'Too many reports, please try again later.' },
+});

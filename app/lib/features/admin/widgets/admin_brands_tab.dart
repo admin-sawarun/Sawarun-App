@@ -53,6 +53,19 @@ class _BrandRow extends ConsumerWidget {
     }
   }
 
+  /// Puts this brand in the Shop's Featured Brand slot (one at a time).
+  Future<void> _feature(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(adminRepoProvider).setFeaturedBrand(brand.id);
+      messenger.showSnackBar(SnackBar(
+          content: Text('${brand.name} is now the featured brand. It shows '
+              'in the Shop once it has approved, visible products.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final (label, color) = switch (brand.status) {
@@ -112,6 +125,16 @@ class _BrandRow extends ConsumerWidget {
                   ),
                 ),
               ],
+            ),
+          ],
+          if (brand.status == 'approved') ...[
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: () => _feature(context, ref),
+              style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44)),
+              icon: const Icon(Icons.star_outline_rounded, size: 18),
+              label: const Text('Set as featured'),
             ),
           ],
           if (brand.status == 'pending') ...[

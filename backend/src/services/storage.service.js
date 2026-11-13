@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, unlink } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { readFile, unlink, readdir } from 'node:fs/promises';
+import { basename, resolve, join } from 'node:path';
 
 import { admin } from '../config/firebase.js';
 import { env } from '../config/env.js';
@@ -74,6 +74,76 @@ async function uploadToFirebase(file, folder) {
  *  controllers fall back to the request host in that case. */
 export function isAbsolute(url) {
   return /^https?:\/\//i.test(url);
+}
+
+const LOCAL_UPLOAD_DIR = resolve(process.cwd(), 'uploads');
+
+/** Per-user folder so every new upload lives under users/{uid}/…, which lets
+ *  account deletion wipe a user's files by prefix. */
+export function userFolder(uid, sub) {
+  return `users/${uid}/${sub}`;
+}
+
+/**
+ * Extract the bucket object path from a Firebase Storage download URL
+ * (https://firebasestorage.googleapis.com/v0/b/<bucket>/o/<encoded path>?alt=media…).
+ * Returns null for anything that isn't such a URL.
+ */
+export function storagePathFromUrl(url) {
+  if (typeof url !== 'string') return null;
+  const m = url.match(/^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/([^?#]+)/i);
+  if (!m) return null;
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort delete of the file behind a stored URL (Firebase Storage or a
+ * local /uploads file). Missing files and errors are logged, never thrown.
+ */
+export async function deleteByUrl(url) {
+  if (typeof url !== 'string' || !url) return;
+  try {
+    const objectPath = storagePathFromUrl(url);
+    if (objectPath) {
+      await bucket().file(objectPath).delete({ ignoreNotFound: true });
+      return;
+    }
+    const local = url.match(/\/uploads\/([^/?#]+)$/);
+    if (local) {
+      await unlink(join(LOCAL_UPLOAD_DIR, basename(local[1]))).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('[storage] deleteByUrl failed:', err.code || '', err.message);
+  }
+}
+
+/**
+ * Remove everything a user owns in storage: the users/{uid}/ prefix in the
+ * bucket, plus (local driver) files in /uploads named "<uid>-…".
+ */
+export async function deleteUserFiles(uid) {
+  if (!uid) return;
+  if (env.firebase.storageBucket) {
+    try {
+      await bucket().deleteFiles({ prefix: `users/${uid}/`, force: true });
+    } catch (err) {
+      console.warn('[storage] deleteFiles(prefix) failed:', err.code || '', err.message);
+    }
+  }
+  try {
+    const names = await readdir(LOCAL_UPLOAD_DIR);
+    await Promise.all(
+      names
+        .filter((n) => n.startsWith(`${uid}-`))
+        .map((n) => unlink(join(LOCAL_UPLOAD_DIR, n)).catch(() => {}))
+    );
+  } catch {
+    /* no local uploads dir — nothing to do */
+  }
 }
 
 export { basename };

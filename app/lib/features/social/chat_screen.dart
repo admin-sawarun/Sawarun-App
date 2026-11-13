@@ -5,7 +5,10 @@ import '../../core/network/upload_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../auth/data/auth_providers.dart';
 import '../profile/data/profile_providers.dart';
+import 'data/block_providers.dart';
 import 'data/chat_providers.dart';
+import 'data/report_service.dart';
+import 'widgets/report_sheet.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key, required this.otherUid});
@@ -25,11 +28,44 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
+  /// True when I've blocked the other person — no sending in either form.
+  bool get _blocked => ref.read(isBlockedProvider(widget.otherUid));
+
+  /// Long-press on a message they sent → report it.
+  void _reportMessage(ChatMessage message) {
+    final me = ref.read(authStateProvider).value?.uid;
+    if (me == null || message.id.isEmpty) return;
+    final chatId = ref.read(chatRepoProvider).chatIdFor(me, widget.otherUid);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: ListTile(
+          leading: const Icon(Icons.flag_outlined, color: AppColors.danger),
+          title: const Text('Report message',
+              style: TextStyle(color: AppColors.danger)),
+          onTap: () {
+            Navigator.pop(sheetCtx);
+            showReportSheet(
+              context,
+              targetType: ReportTarget.message,
+              targetId: '$chatId/${message.id}',
+              targetUid: message.senderId,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     final me = ref.read(authStateProvider).value?.uid;
-    if (me == null) return;
+    if (me == null || _blocked) return;
     _controller.clear();
     await ref
         .read(chatRepoProvider)
@@ -39,7 +75,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Share an outfit photo from the gallery (spec: Module 3, Chat System).
   Future<void> _sendImage() async {
     final me = ref.read(authStateProvider).value?.uid;
-    if (me == null) return;
+    if (me == null || _blocked) return;
 
     final upload = ref.read(uploadServiceProvider);
     final file = await upload.pickFromGallery();
@@ -63,7 +99,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _accept() async {
     final me = ref.read(authStateProvider).value?.uid;
-    if (me == null) return;
+    if (me == null || _blocked) return;
     await ref.read(chatRepoProvider).acceptRequest(me, widget.otherUid);
   }
 
@@ -76,7 +112,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _sendRequest() async {
     final me = ref.read(authStateProvider).value?.uid;
-    if (me == null) return;
+    if (me == null || _blocked) return;
     await ref.read(chatRepoProvider).sendRequest(me, widget.otherUid);
   }
 
@@ -86,6 +122,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final other = ref.watch(userByUidProvider(widget.otherUid)).value;
     final thread = ref.watch(chatThreadProvider(widget.otherUid)).value;
     final accepted = thread?.status == ChatStatus.accepted;
+    final blocked = ref.watch(isBlockedProvider(widget.otherUid));
 
     // Only subscribe once the thread is accepted — reading messages of a
     // thread that doesn't exist yet is denied by the rules.
@@ -149,11 +186,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         itemBuilder: (context, i) => _Bubble(
                           message: messages[i],
                           mine: messages[i].senderId == me,
+                          onLongPress: messages[i].senderId == me
+                              ? null
+                              : () => _reportMessage(messages[i]),
                         ),
                       );
                     },
                   )
-                : _RequestGate(
+                : blocked
+                    ? const SizedBox.shrink()
+                    : _RequestGate(
                     thread: thread,
                     me: me,
                     otherName: other?.name ?? 'this user',
@@ -162,7 +204,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     onDecline: _decline,
                   ),
           ),
-          if (accepted)
+          if (blocked)
+            _BlockedBar(otherUid: widget.otherUid)
+          else if (accepted)
             _Composer(
               controller: _controller,
               busy: _sendingImage,
@@ -293,12 +337,22 @@ class _RequestGate extends StatelessWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message, required this.mine});
+  const _Bubble({required this.message, required this.mine, this.onLongPress});
   final ChatMessage message;
   final bool mine;
 
+  /// Set for received messages: opens the report option.
+  final VoidCallback? onLongPress;
+
   @override
   Widget build(BuildContext context) {
+    return GestureDetector(
+      onLongPress: onLongPress,
+      child: _content(context),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     final maxWidth = MediaQuery.of(context).size.width * 0.72;
     final radius = BorderRadius.only(
       topLeft: const Radius.circular(18),
@@ -404,6 +458,45 @@ class _Composer extends StatelessWidget {
                 child: const Icon(Icons.arrow_upward_rounded,
                     color: AppColors.white, size: 20),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Replaces the composer when I've blocked the other person.
+class _BlockedBar extends ConsumerWidget {
+  const _BlockedBar({required this.otherUid});
+  final String otherUid;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(authStateProvider).value?.uid;
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.block_rounded, size: 18, color: AppColors.inkMuted),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'You blocked this user. Unblock to chat.',
+                style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+              ),
+            ),
+            TextButton(
+              onPressed: me == null
+                  ? null
+                  : () => ref.read(blockRepoProvider).unblock(me, otherUid),
+              child: const Text('Unblock'),
             ),
           ],
         ),

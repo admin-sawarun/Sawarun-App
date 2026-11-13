@@ -89,16 +89,29 @@ class AuthService {
   Future<void> signOut() => _auth.signOut();
 
   /// Create the user's profile doc the first time they sign in.
+  ///
+  /// `users/{uid}` is readable by every signed-in user, so email and phone go
+  /// to the owner-only `users/{uid}/private/contact` doc instead. That doc is
+  /// refreshed on every sign-in so existing users get one too.
   Future<void> _ensureUserDoc(User? user) async {
     if (user == null) return;
     final ref = _db.collection('users').doc(user.uid);
+    // Never let this block sign-in (e.g. if the deployed rules are older
+    // than this build); the contact doc is refreshed on the next sign-in.
+    try {
+      await ref.collection('private').doc('contact').set({
+        'email': user.email,
+        'phone': user.phoneNumber,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Could not save private contact: $e');
+    }
     final snap = await ref.get();
     if (snap.exists) return;
     await ref.set({
       'uid': user.uid,
       'name': user.displayName ?? 'Savarun User',
-      'email': user.email,
-      'phone': user.phoneNumber,
       'photoURL': user.photoURL,
       'bio': '',
       'style': null,

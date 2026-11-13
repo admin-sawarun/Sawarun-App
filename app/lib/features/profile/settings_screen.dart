@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/legal/legal_links.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../admin/data/admin_service.dart';
 import '../auth/data/auth_providers.dart';
+import 'data/account_service.dart';
 import 'data/profile_providers.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -62,6 +64,11 @@ class SettingsScreen extends ConsumerWidget {
                   style: const TextStyle(fontSize: 12),
                 ),
               ),
+              _Tile(
+                icon: Icons.block_rounded,
+                label: 'Blocked users',
+                onTap: () => context.push(Routes.blockedUsers),
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -97,6 +104,21 @@ class SettingsScreen extends ConsumerWidget {
                       'with other fashion lovers and discover brands.',
                 ),
               ),
+              _Tile(
+                icon: Icons.privacy_tip_outlined,
+                label: 'Privacy Policy',
+                onTap: () => LegalLinks.open(context, LegalLinks.privacyPolicy),
+              ),
+              _Tile(
+                icon: Icons.description_outlined,
+                label: 'Terms & Conditions',
+                onTap: () => LegalLinks.open(context, LegalLinks.terms),
+              ),
+              _Tile(
+                icon: Icons.mail_outline_rounded,
+                label: 'Contact Support',
+                onTap: () => LegalLinks.contactSupport(context),
+              ),
             ],
           ),
           // Admin Dashboard entry — only shown to users with the admin claim.
@@ -128,6 +150,29 @@ class SettingsScreen extends ConsumerWidget {
             ),
             icon: const Icon(Icons.logout_rounded, size: 20),
             label: const Text('Log Out'),
+          ),
+          const SizedBox(height: 20),
+          _Group(
+            title: 'Danger Zone',
+            children: [
+              ListTile(
+                leading: const Icon(Icons.delete_forever_rounded,
+                    color: AppColors.danger),
+                title: const Text('Delete Account',
+                    style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.danger,
+                        fontWeight: FontWeight.w600)),
+                subtitle: const Text(
+                    'Permanently delete your account and data',
+                    style: TextStyle(fontSize: 12)),
+                onTap: () => showDialog<void>(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => const _DeleteAccountDialog(),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           const Center(
@@ -205,6 +250,123 @@ class _Tile extends StatelessWidget {
         ],
       ),
       onTap: onTap,
+    );
+  }
+}
+
+/// Confirms permanent account deletion: explains what goes, requires typing
+/// DELETE, shows progress, and signs out + returns to Login on success.
+class _DeleteAccountDialog extends ConsumerStatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  ConsumerState<_DeleteAccountDialog> createState() =>
+      _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends ConsumerState<_DeleteAccountDialog> {
+  final _confirm = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _confirm.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  bool get _typedDelete => _confirm.text.trim() == 'DELETE';
+
+  Future<void> _delete() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final router = GoRouter.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(accountRepoProvider).deleteMyAccount();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      router.go(Routes.login);
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Your account and data have been deleted.')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e is ReauthRequiredException
+            ? e.toString()
+            : e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Delete account?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This permanently deletes your profile, wardrobe, outfit '
+              'history, posts, chats and photos. This cannot be undone.',
+              style: TextStyle(fontSize: 14, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            const Text('Type DELETE to confirm',
+                style: TextStyle(fontSize: 12.5, color: AppColors.inkMuted)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _confirm,
+              enabled: !_busy,
+              autocorrect: false,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(hintText: 'DELETE'),
+            ),
+            if (_busy) ...[
+              const SizedBox(height: 16),
+              const Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 12),
+                  Text('Deleting your account…'),
+                ],
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!,
+                  style:
+                      const TextStyle(fontSize: 13, color: AppColors.danger)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _busy || !_typedDelete ? null : _delete,
+          style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+          child: const Text('Delete permanently'),
+        ),
+      ],
     );
   }
 }

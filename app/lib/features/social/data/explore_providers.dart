@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/data/auth_providers.dart';
 import '../../profile/data/profile_providers.dart';
+import 'block_providers.dart';
 
 /// Users for the Explore screen, filtered by [style] ('All' = no filter).
 ///
@@ -13,6 +14,8 @@ import '../../profile/data/profile_providers.dart';
 final exploreUsersProvider =
     StreamProvider.family<List<UserProfile>, String>((ref, style) {
   final me = ref.watch(authStateProvider).value?.uid;
+  // Blocked users are hidden from search/explore.
+  final blocked = ref.watch(blockedSetProvider);
 
   Query<Map<String, dynamic>> query =
       FirebaseFirestore.instance.collection('users');
@@ -21,7 +24,7 @@ final exploreUsersProvider =
   }
 
   return query.limit(100).snapshots().map((snap) => snap.docs
-      .where((d) => d.id != me)
+      .where((d) => d.id != me && !blocked.contains(d.id))
       .map((d) => UserProfile.fromDoc(d.id, d.data()))
       .toList());
 });

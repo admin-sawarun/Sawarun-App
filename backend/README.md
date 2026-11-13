@@ -64,4 +64,34 @@ POST   /api/admin/users/:uid/moderate         { action: 'ban'|'suspend'|'verify'
 POST   /api/admin/users/:uid/set-admin        { admin: boolean }
 ```
 
+## Play Store compliance: account deletion, reports, legal pages
+
+```
+# Account  (auth)
+DELETE /api/users/me                 → { ok: true }   permanent, idempotent; 500 → retry
+
+# Reports  (auth, max 30/hour per user)
+POST   /api/reports   { targetType: 'user'|'post'|'message', targetId, targetUid,
+                        reason: 'spam'|'harassment'|'nudity'|'hate'|'violence'|'fake'|'other',
+                        details? (≤500) }                    → 201 { ok: true, id }
+                      # message targetId: "<chatId>/<messageId>" (preferred) or bare message id
+
+# Moderation  (auth + admin claim)
+GET    /api/admin/reports?status=open|resolved   newest first, max 200, + reporterName/targetName
+POST   /api/admin/reports/:id/resolve  { action: 'dismiss'|'remove_content'|'ban_user' }
+```
+
+`DELETE /api/users/me` removes `users/{uid}` (+ all subcollections), the user's posts and
+their `postLikes`, likes they gave, `follows` in both directions, `chats` they take part in
+(+ messages), brands/products they own, every Storage file referenced in those docs plus
+the whole `users/{uid}/` bucket prefix, and finally the Firebase Auth user. Reports they filed
+are kept with `reporterUid: null`; their `affiliateClicks` keep the count with `userId: null`.
+
+Auth now verifies tokens with `checkRevoked`: revoked sessions → 401, disabled (banned)
+accounts → 403. Every authenticated request refreshes `users/{uid}.lastActiveAt` (at most
+hourly per uid) for the admin DAU metric.
+
+Public pages (no auth, static HTML in `public/`): `/` (landing), `/privacy-policy`, `/terms`,
+`/account-deletion`, `/child-safety`. Use these URLs in the Play Console listing.
+
 See [`DATA_MODEL.md`](./DATA_MODEL.md) for the Firestore collections this server reads/writes.

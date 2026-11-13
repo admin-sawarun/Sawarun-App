@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../social/data/feed_providers.dart';
+import '../../social/data/report_service.dart';
+import '../../social/widgets/report_sheet.dart';
 
 /// Outfit Inspiration Grid (Module 1, Step 7): a Pinterest-style grid of other
 /// users' shared outfits in the same dominant [style], most popular first.
@@ -73,6 +75,13 @@ class _InspoCard extends StatelessWidget {
     return GestureDetector(
       // Tapping opens the author's profile to explore more of their looks.
       onTap: () => context.push(Routes.otherProfile, extra: post.authorUid),
+      // Long-press to report the post.
+      onLongPress: () => showReportSheet(
+        context,
+        targetType: ReportTarget.post,
+        targetId: post.id,
+        targetUid: post.authorUid,
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: Stack(
