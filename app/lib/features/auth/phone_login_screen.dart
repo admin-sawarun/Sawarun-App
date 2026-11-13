@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'data/auth_providers.dart';
+import 'data/countries.dart';
 
 class PhoneLoginScreen extends ConsumerStatefulWidget {
   const PhoneLoginScreen({super.key});
@@ -24,7 +25,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   // number" (Auth → Sign-in method → Phone → Phone numbers for testing). No
   // real SMS is sent and app verification is skipped, yet it produces a real
   // Firebase session. When this number is used the OTP auto-fills and submits.
-  static const _demoPhone = '+919999999999';
+  static const _demoPhone = '+919876543210';
   static const _demoOtp = '123456';
 
   _Step _step = _Step.enterPhone;
@@ -36,9 +37,38 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   ConfirmationResult? _webConfirmation; // web
   String? _verificationId; // mobile
 
-  String get _phoneE164 {
-    final raw = _phoneController.text.trim().replaceAll(' ', '');
-    return raw.startsWith('+') ? raw : '+91$raw'; // default country: India
+  Country _country = kCountries.first; // India
+
+  /// The national number typed by the user, digits only, without a leading 0.
+  String get _nationalDigits => _phoneController.text
+      .replaceAll(RegExp(r'\D'), '')
+      .replaceFirst(RegExp(r'^0+'), '');
+
+  String get _phoneE164 => '${_country.dialCode}$_nationalDigits';
+
+  /// Returns an error message, or null when the number looks valid.
+  String? _validatePhone() {
+    final n = _nationalDigits.length;
+    if (n == 0) return 'Enter your phone number';
+    final expected = _country.digits;
+    if (expected != null && n != expected) {
+      return 'Enter a valid $expected-digit ${_country.name} number';
+    }
+    if (expected == null && (n < 4 || n > 14)) {
+      return 'Enter a valid phone number';
+    }
+    return null;
+  }
+
+  Future<void> _pickCountry() async {
+    final picked = await showModalBottomSheet<Country>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: AppColors.canvas,
+      builder: (ctx) => _CountryPickerSheet(selected: _country),
+    );
+    if (picked != null) setState(() => _country = picked);
   }
 
   @override
@@ -49,10 +79,12 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   }
 
   Future<void> _sendOtp() async {
-    if (_phoneController.text.trim().isEmpty) {
-      _toast('Enter your phone number');
+    final error = _validatePhone();
+    if (error != null) {
+      _toast(error);
       return;
     }
+    FocusScope.of(context).unfocus();
     setState(() => _busy = true);
     final auth = ref.read(authServiceProvider);
     try {
@@ -184,12 +216,38 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
           controller: _phoneController,
           keyboardType: TextInputType.phone,
           inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]'))
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(15),
           ],
-          decoration: const InputDecoration(
-            hintText: '+91 98765 43210',
-            prefixIcon:
-                Icon(Icons.phone_rounded, color: AppColors.inkMuted),
+          decoration: InputDecoration(
+            hintText: '98765 43210',
+            // Tappable country code, e.g. "🇮🇳 +91 ▾".
+            prefixIcon: InkWell(
+              onTap: _busy ? null : _pickCountry,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 14, right: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_country.flag, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 6),
+                    Text(_country.dialCode,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.ink)),
+                    const Icon(Icons.arrow_drop_down_rounded,
+                        color: AppColors.inkMuted),
+                    const SizedBox(width: 4),
+                    Container(
+                        width: 1,
+                        height: 24,
+                        color: AppColors.inkMuted.withValues(alpha: 0.3)),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 24),
@@ -260,6 +318,73 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Searchable list of every country calling code.
+class _CountryPickerSheet extends StatefulWidget {
+  const _CountryPickerSheet({required this.selected});
+  final Country selected;
+
+  @override
+  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
+}
+
+class _CountryPickerSheetState extends State<_CountryPickerSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _query.trim().toLowerCase().replaceAll('+', '');
+    final list = q.isEmpty
+        ? kCountries
+        : kCountries
+            .where((c) =>
+                c.name.toLowerCase().contains(q) ||
+                c.dialCode.substring(1).startsWith(q) ||
+                c.iso.toLowerCase() == q)
+            .toList();
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.8,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: TextField(
+              onChanged: (v) => setState(() => _query = v),
+              decoration: const InputDecoration(
+                hintText: 'Search country or code',
+                prefixIcon:
+                    Icon(Icons.search_rounded, color: AppColors.inkMuted),
+              ),
+            ),
+          ),
+          Expanded(
+            child: list.isEmpty
+                ? const Center(
+                    child: Text('No country found',
+                        style: TextStyle(color: AppColors.inkMuted)))
+                : ListView.builder(
+                    itemCount: list.length,
+                    itemBuilder: (_, i) {
+                      final c = list[i];
+                      return ListTile(
+                        leading:
+                            Text(c.flag, style: const TextStyle(fontSize: 22)),
+                        title: Text(c.name),
+                        trailing: Text(c.dialCode,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink)),
+                        selected: identical(c, widget.selected),
+                        onTap: () => Navigator.of(context).pop(c),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -58,7 +58,14 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   /// the "high" preset and throw on initialize — so we retry at a lower preset
   /// before giving up, and always clear the loading state. Returns success.
   Future<bool> _startController(int index) async {
+    // Close the current camera BEFORE opening the next one: most phones can't
+    // keep two cameras open, so opening the front camera while the rear one
+    // is still running fails and left the screen blank.
     final old = _controller;
+    if (old != null) {
+      if (mounted) setState(() => _controller = null);
+      await _safeDispose(old);
+    }
 
     Future<CameraController?> tryStart(ResolutionPreset preset) async {
       final c = CameraController(_cameras[index], preset, enableAudio: false);
@@ -66,7 +73,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         await c.initialize();
         return c;
       } catch (_) {
-        await c.dispose();
+        await _safeDispose(c);
         return null;
       }
     }
@@ -82,9 +89,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       return false;
     }
 
-    await old?.dispose();
     if (!mounted) {
-      await controller.dispose();
+      await _safeDispose(controller);
       return false;
     }
     setState(() {
@@ -96,13 +102,25 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     return true;
   }
 
+  /// The camera plugin throws if a controller is disposed before its preview
+  /// surface was created; that must not crash the screen.
+  Future<void> _safeDispose(CameraController c) async {
+    try {
+      await c.dispose();
+    } catch (_) {}
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final c = _controller;
-    if (c == null || !c.value.isInitialized) return;
+    if (_cameras.isEmpty) return;
     if (state == AppLifecycleState.inactive) {
-      c.dispose();
-    } else if (state == AppLifecycleState.resumed) {
+      final c = _controller;
+      if (c == null) return;
+      // Drop the reference first so the preview never builds on a disposed controller.
+      setState(() => _controller = null);
+      _safeDispose(c);
+    } else if (state == AppLifecycleState.resumed && _controller == null && !_initializing) {
+      setState(() => _initializing = true);
       _startController(_index);
     }
   }
@@ -110,7 +128,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.dispose();
+    final c = _controller;
+    _controller = null;
+    if (c != null) _safeDispose(c);
     super.dispose();
   }
 
@@ -185,8 +205,22 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     if (_error != null || _controller == null) {
       return _cameraUnavailable();
     }
-    return Center(
-      child: CameraPreview(_controller!),
+    // Full-screen "cover" preview (spec: full-screen live preview). The
+    // plugin reports previewSize in landscape, so width/height are swapped.
+    final c = _controller!;
+    final size = c.value.previewSize;
+    if (size == null) return Center(child: CameraPreview(c));
+    return ClipRect(
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: size.height,
+            height: size.width,
+            child: CameraPreview(c),
+          ),
+        ),
+      ),
     );
   }
 
