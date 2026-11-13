@@ -83,6 +83,23 @@ POST   /api/reports   { targetType: 'user'|'post'|'message', targetId, targetUid
 # Moderation  (auth + admin claim)
 GET    /api/admin/reports?status=open|resolved   newest first, max 200, + reporterName/targetName
 POST   /api/admin/reports/:id/resolve  { action: 'dismiss'|'remove_content'|'ban_user' }
+
+# Admin console  (auth + admin claim)
+GET    /api/admin/posts?limit=40&cursor=<postId>&q=    → { data: [{id, imageUrl, caption, style, likes, createdAt,
+                                                         authorUid, authorName, authorUsername, authorPhotoURL}], nextCursor }
+DELETE /api/admin/posts/:id                            post + postLikes + Storage image
+GET    /api/admin/analyses?limit=40&cursor=<id>        → { data: [{id, uid, userName, userPhotoURL, fitScore, topStyle,
+                                                         styleDna, imageUrl, createdAt}], nextCursor }   (analysesLog)
+GET    /api/admin/analyses/summary?days=30             → { total, averageScore, buckets{'0-39','40-59','60-79','80-100'},
+                                                         topStyles[{style, count}] }   (≤5000 docs)
+GET    /api/admin/affiliate/performance?days=30        → { totalClicks, days[], clicks[], topProducts[{id, name, brandName,
+                                                         imageUrl, clicks}], topBrands[{id, name, clicks}] }
+GET    /api/admin/admins                               → [{uid, email, displayName, lastSignInAt, createdAt, disabled}]
+POST   /api/admin/admins          { email, password? } → { uid, email, created }   (creates the user if password ≥8 given)
+DELETE /api/admin/admins/:uid                          remove claim + revoke tokens (not yourself, not the last admin)
+GET    /api/admin/audit?limit=50&cursor=<id>           → { data: [{id, adminEmail, action, targetType, targetId, details, at}], nextCursor }
+GET    /api/admin/system                               → { backendVersion, nodeEnv, aiProvider, aiModel, storageDriver,
+                                                         featuredBrand{id,name}|null, counts{users,brands,products,posts}, links, serverTime }
 ```
 
 `DELETE /api/users/me` removes `users/{uid}` (+ all subcollections), the user's posts and

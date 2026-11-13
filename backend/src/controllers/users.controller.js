@@ -122,6 +122,13 @@ export const deleteMe = asyncHandler(async (req, res) => {
     await writer.close();
   });
 
+  // 6b. Admin analyses log entries (images are also referenced by outfitHistory).
+  await step('analysesLog', async () => {
+    const logs = await db.collection('analysesLog').where('uid', '==', uid).get();
+    logs.docs.forEach((l) => collectFileUrls(l.data().imageUrl, urls));
+    await deleteDocs(logs.docs.map((l) => l.ref));
+  });
+
   // 7. Affiliate click log: keep the aggregate, drop the link to the user.
   await step('affiliateClicks', async () => {
     const clicks = await db.collection('affiliateClicks').where('userId', '==', uid).get();

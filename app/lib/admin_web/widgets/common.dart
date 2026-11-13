@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -552,5 +554,175 @@ class PageScroll extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/* ───────────────────────── Shared extras ───────────────────────── */
+
+/// e.g. "Nov 13, 2026, 14:05".
+String formatDateTime(DateTime? d) {
+  if (d == null) return '—';
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${formatDate(d)}, ${two(d.hour)}:${two(d.minute)}';
+}
+
+/// A "nice" axis step giving roughly four gridlines up to [max].
+double niceChartInterval(double max) {
+  if (max <= 4) return 1;
+  final raw = max / 4;
+  final mag = math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+  final norm = raw / mag;
+  final step = norm <= 1
+      ? 1
+      : norm <= 2
+          ? 2
+          : norm <= 5
+              ? 5
+              : 10;
+  return step * mag;
+}
+
+/// 7d / 30d / 90d segmented control used by analytics pages.
+class RangeSelector extends StatelessWidget {
+  const RangeSelector({super.key, required this.days, required this.onChanged});
+  final int days;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<int>(
+      showSelectedIcon: false,
+      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+      segments: const [
+        ButtonSegment(value: 7, label: Text('7d')),
+        ButtonSegment(value: 30, label: Text('30d')),
+        ButtonSegment(value: 90, label: Text('90d')),
+      ],
+      selected: {days},
+      onSelectionChanged: (s) => onChanged(s.first),
+    );
+  }
+}
+
+/// Centered "Load more" button for cursor-paginated lists.
+class LoadMoreButton extends StatelessWidget {
+  const LoadMoreButton({super.key, required this.loading, required this.onPressed});
+  final bool loading;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Center(
+        child: OutlinedButton.icon(
+          onPressed: loading ? null : onPressed,
+          icon: loading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.expand_more_rounded),
+          label: const Text('Load more'),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small KPI tile: coloured icon, label and a big value.
+class StatTile extends StatelessWidget {
+  const StatTile({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.color = AdminPalette.accent,
+    this.loading = false,
+    this.caption,
+  });
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final bool loading;
+  final String? caption;
+
+  @override
+  Widget build(BuildContext context) {
+    return PanelCard(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13, color: AdminPalette.muted)),
+                const SizedBox(height: 6),
+                loading
+                    ? const Skeleton(width: 70, height: 24)
+                    : Text(value,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            height: 1.1)),
+                if (caption != null && !loading) ...[
+                  const SizedBox(height: 4),
+                  Text(caption!,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 12, color: AdminPalette.muted)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lays [children] out in equal-width columns ([minItemWidth] each at least).
+class ResponsiveGrid extends StatelessWidget {
+  const ResponsiveGrid({
+    super.key,
+    required this.children,
+    this.minItemWidth = 260,
+    this.maxColumns = 4,
+    this.gap = 16,
+  });
+  final List<Widget> children;
+  final double minItemWidth;
+  final int maxColumns;
+  final double gap;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final cols = ((c.maxWidth + gap) / (minItemWidth + gap))
+          .floor()
+          .clamp(1, maxColumns);
+      final w = (c.maxWidth - gap * (cols - 1)) / cols;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [for (final ch in children) SizedBox(width: w, child: ch)],
+      );
+    });
   }
 }

@@ -4,6 +4,12 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { deleteByUrl } from '../services/storage.service.js';
 import { applyModeration } from './admin.controller.js';
+import { removePost } from '../services/moderation.service.js';
+import { logAdminAction } from '../services/audit.service.js';
+
+// removePost lives in services/moderation.service.js (shared with the admin
+// posts endpoint); re-exported here for backward compatibility.
+export { removePost };
 
 const REASONS = ['spam', 'harassment', 'nudity', 'hate', 'violence', 'fake', 'other'];
 
@@ -135,23 +141,16 @@ export const resolveReport = asyncHandler(async (req, res) => {
     resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
+  logAdminAction(req, 'report.resolve', { type: 'report', id: ref.id }, {
+    action,
+    reportTargetType: report.targetType || null,
+    reportTargetId: report.targetId || null,
+    targetUid: report.targetUid || null,
+    contentRemoved,
+  });
+
   res.json({ ok: true, data: { id: ref.id, status: 'resolved', action, contentRemoved } });
 });
-
-/** Delete a post, its likes and its image. Returns false if it didn't exist. */
-export async function removePost(postId) {
-  const postRef = db.collection('posts').doc(postId);
-  const post = await postRef.get();
-  if (!post.exists) return false;
-  const data = post.data();
-  const likes = await db.collection('postLikes').where('postId', '==', postId).get();
-  const writer = db.bulkWriter();
-  likes.docs.forEach((d) => writer.delete(d.ref));
-  await writer.close();
-  await db.recursiveDelete(postRef);
-  await deleteByUrl(data.imageUrl);
-  return true;
-}
 
 /** Delete a chat message (and its image). targetId is "<chatId>/<msgId>" or a bare message id. */
 async function removeMessage(targetId, targetUid) {

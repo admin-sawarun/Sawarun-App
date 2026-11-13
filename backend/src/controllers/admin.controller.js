@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getWeights, setWeights } from '../services/fitScore.service.js';
 import { istDay, istDayStart, lastIstDays, toDate, toIso } from '../services/stats.service.js';
+import { logAdminAction } from '../services/audit.service.js';
 
 /* ─────────────── Analytics Dashboard ─────────────── */
 
@@ -561,6 +562,10 @@ export const setProductApproval = asyncHandler(async (req, res) => {
   const snap = await ref.get();
   if (!snap.exists) throw ApiError.notFound('Product not found');
   await ref.update({ approved: approved.data });
+  logAdminAction(req, 'product.approval', { type: 'product', id: ref.id }, {
+    approved: approved.data,
+    name: snap.get('name') || null,
+  });
   res.json({ ok: true, data: { id: ref.id, approved: approved.data } });
 });
 
@@ -624,6 +629,13 @@ export const decideBrand = asyncHandler(async (req, res) => {
     productsUpdated = targets.length;
   }
 
+  logAdminAction(req, 'brand.decision', { type: 'brand', id: ref.id }, {
+    status,
+    note: parsed.data.note || null,
+    name: snap.get('name') || null,
+    productsUpdated,
+  });
+
   res.json({ ok: true, data: { id: ref.id, status, productsUpdated } });
 });
 
@@ -637,6 +649,10 @@ export const setProductVisibility = asyncHandler(async (req, res) => {
   if (!snap.exists) throw ApiError.notFound('Product not found');
 
   await ref.update({ hidden: hidden.data });
+  logAdminAction(req, 'product.visibility', { type: 'product', id: ref.id }, {
+    hidden: hidden.data,
+    name: snap.get('name') || null,
+  });
   res.json({ ok: true, data: { id: ref.id, hidden: hidden.data } });
 });
 
@@ -646,6 +662,7 @@ export const setFeaturedBrand = asyncHandler(async (req, res) => {
   if (!brandId.success) throw ApiError.badRequest('brandId is required');
 
   await db.collection('config').doc('home').set({ featuredBrandId: brandId.data }, { merge: true });
+  logAdminAction(req, 'brand.featured', { type: 'brand', id: brandId.data });
   res.json({ ok: true, data: { featuredBrandId: brandId.data } });
 });
 
@@ -660,6 +677,7 @@ export const getFitWeights = asyncHandler(async (_req, res) => {
 export const updateFitWeights = asyncHandler(async (req, res) => {
   try {
     const updated = await setWeights(req.body || {});
+    logAdminAction(req, 'fitWeights.update', { type: 'config', id: 'fitScoreWeights' }, { weights: updated });
     res.json({ ok: true, data: updated });
   } catch (err) {
     throw ApiError.badRequest(err.message);
@@ -679,6 +697,7 @@ export const moderateUser = asyncHandler(async (req, res) => {
 
   const { uid } = req.params;
   const status = await applyModeration(uid, parsed.data.action, req.user.uid);
+  logAdminAction(req, 'user.moderate', { type: 'user', id: uid }, { action: parsed.data.action, status });
   res.json({ ok: true, data: { uid, status } });
 });
 
@@ -710,5 +729,6 @@ export const setUserAdmin = asyncHandler(async (req, res) => {
   if (!isAdmin.success) throw ApiError.badRequest('admin (boolean) is required');
 
   await firebaseAuth.setCustomUserClaims(req.params.uid, { admin: isAdmin.data });
+  logAdminAction(req, 'user.setAdmin', { type: 'user', id: req.params.uid }, { admin: isAdmin.data });
   res.json({ ok: true, data: { uid: req.params.uid, admin: isAdmin.data } });
 });

@@ -6,10 +6,16 @@ import 'package:google_fonts/google_fonts.dart';
 import 'auth/access_denied_page.dart';
 import 'auth/admin_session.dart';
 import 'auth/login_page.dart';
+import 'pages/activity_page.dart';
+import 'pages/affiliate_page.dart';
+import 'pages/analyses_page.dart';
 import 'pages/brands_page.dart';
 import 'pages/dashboard_page.dart';
+import 'pages/posts_page.dart';
 import 'pages/products_page.dart';
 import 'pages/reports_page.dart';
+import 'pages/settings_page.dart';
+import 'pages/team_page.dart';
 import 'pages/tuning_page.dart';
 import 'pages/users_page.dart';
 import 'shell/admin_shell.dart';
@@ -97,6 +103,12 @@ Widget _pageFor(String path) => switch (path) {
       '/products' => const ProductsPage(),
       '/reports' => const ReportsPage(),
       '/tuning' => const TuningPage(),
+      '/posts' => const PostsPage(),
+      '/analyses' => const AnalysesPage(),
+      '/affiliate' => const AffiliatePage(),
+      '/team' => const TeamPage(),
+      '/activity' => const ActivityPage(),
+      '/settings' => const SettingsPage(),
       _ => const DashboardPage(),
     };
 

@@ -14,18 +14,52 @@ class AdminNavItem {
   final IconData activeIcon;
 }
 
-const adminNavItems = [
-  AdminNavItem('/dashboard', 'Dashboard', Icons.space_dashboard_outlined,
-      Icons.space_dashboard_rounded),
-  AdminNavItem(
-      '/users', 'Users', Icons.people_outline_rounded, Icons.people_rounded),
-  AdminNavItem('/brands', 'Brands', Icons.storefront_outlined,
-      Icons.storefront_rounded),
-  AdminNavItem('/products', 'Products', Icons.shopping_bag_outlined,
-      Icons.shopping_bag_rounded),
-  AdminNavItem(
-      '/reports', 'Reports', Icons.flag_outlined, Icons.flag_rounded),
-  AdminNavItem('/tuning', 'AI Tuning', Icons.tune_outlined, Icons.tune_rounded),
+class AdminNavSection {
+  const AdminNavSection(this.label, this.items);
+  final String label;
+  final List<AdminNavItem> items;
+}
+
+const adminNavSections = [
+  AdminNavSection('Overview', [
+    AdminNavItem('/dashboard', 'Dashboard', Icons.space_dashboard_outlined,
+        Icons.space_dashboard_rounded),
+  ]),
+  AdminNavSection('Community', [
+    AdminNavItem(
+        '/users', 'Users', Icons.people_outline_rounded, Icons.people_rounded),
+    AdminNavItem('/posts', 'Posts', Icons.photo_library_outlined,
+        Icons.photo_library_rounded),
+    AdminNavItem(
+        '/reports', 'Reports', Icons.flag_outlined, Icons.flag_rounded),
+  ]),
+  AdminNavSection('AI', [
+    AdminNavItem('/analyses', 'Outfit Analyses', Icons.auto_awesome_outlined,
+        Icons.auto_awesome_rounded),
+    AdminNavItem(
+        '/tuning', 'AI Tuning', Icons.tune_outlined, Icons.tune_rounded),
+  ]),
+  AdminNavSection('Marketplace', [
+    AdminNavItem('/brands', 'Brands', Icons.storefront_outlined,
+        Icons.storefront_rounded),
+    AdminNavItem('/products', 'Products', Icons.shopping_bag_outlined,
+        Icons.shopping_bag_rounded),
+    AdminNavItem('/affiliate', 'Affiliate Performance',
+        Icons.ads_click_outlined, Icons.ads_click_rounded),
+  ]),
+  AdminNavSection('Admin', [
+    AdminNavItem('/team', 'Admin Team', Icons.admin_panel_settings_outlined,
+        Icons.admin_panel_settings_rounded),
+    AdminNavItem('/activity', 'Activity Log', Icons.history_rounded,
+        Icons.history_rounded),
+    AdminNavItem('/settings', 'Settings', Icons.settings_outlined,
+        Icons.settings_rounded),
+  ]),
+];
+
+/// Flat list of every page, in sidebar order (used by the router).
+final adminNavItems = [
+  for (final s in adminNavSections) ...s.items,
 ];
 
 /// Authenticated layout: sidebar (≥1000px), collapsible rail (700–1000px) or
@@ -43,7 +77,9 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   bool _railExpanded = false;
 
   AdminNavItem get _current => adminNavItems.firstWhere(
-        (i) => widget.location.startsWith(i.path),
+        (i) =>
+            widget.location == i.path ||
+            widget.location.startsWith('${i.path}/'),
         orElse: () => adminNavItems.first,
       );
 
@@ -206,15 +242,26 @@ class _Sidebar extends ConsumerWidget {
               ),
             ),
             const Divider(),
-            const SizedBox(height: 12),
-            for (final item in adminNavItems)
-              _NavTile(
-                item: item,
-                selected: item.path == current,
-                expanded: expanded,
-                onTap: () => onNavigate(item.path),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(top: 4, bottom: 12),
+                children: [
+                  for (final (i, section) in adminNavSections.indexed) ...[
+                    _SectionHeader(
+                        label: section.label,
+                        expanded: expanded,
+                        first: i == 0),
+                    for (final item in section.items)
+                      _NavTile(
+                        item: item,
+                        selected: item.path == current,
+                        expanded: expanded,
+                        onTap: () => onNavigate(item.path),
+                      ),
+                  ],
+                ],
               ),
-            const Spacer(),
+            ),
             if (onToggle != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -247,6 +294,40 @@ class _Sidebar extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.label,
+    required this.expanded,
+    required this.first,
+  });
+  final String label;
+  final bool expanded;
+  final bool first;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!expanded) {
+      // Collapsed rail: a short divider separates the groups.
+      return first
+          ? const SizedBox(height: 8)
+          : const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+              child: Divider(),
+            );
+    }
+    return Padding(
+      padding: EdgeInsets.fromLTRB(26, first ? 12 : 18, 16, 6),
+      child: Text(label.toUpperCase(),
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+              fontSize: 11,
+              letterSpacing: 0.8,
+              fontWeight: FontWeight.w700,
+              color: AdminPalette.muted)),
     );
   }
 }

@@ -68,6 +68,21 @@ statsDaily/{day}           → { analyses, clicks, styles: { "<Top Style>": n } 
 ```
 Posts are created client-side, so post counts come from `posts.createdAt`.
 
+## `analysesLog/{autoId}`  ← written by `POST /api/analysis` (only when saved; fire-and-forget)
+```
+{ uid, historyId, fitScore, topStyle, styleDna: [{category, percentage}], imageUrl, createdAt }
+```
+Global, admin-only log (read by `GET /api/admin/analyses*`). Deleted by `DELETE /api/users/me`.
+Only analyses made after this was deployed are logged.
+
+## `adminAudit/{autoId}`  ← written by every admin mutation (fire-and-forget)
+```
+{ adminUid, adminEmail, action, targetType, targetId, details: {…small}, at }
+```
+Actions: `user.moderate`, `user.setAdmin`, `brand.decision`, `brand.featured`,
+`product.visibility`, `product.approval`, `fitWeights.update`, `report.resolve`,
+`post.delete`, `admin.add`, `admin.remove`.
+
 ## `reports/{autoId}`  ← written by `POST /api/reports`, resolved by admin
 ```
 {

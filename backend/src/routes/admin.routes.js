@@ -18,6 +18,18 @@ import {
   setUserAdmin,
 } from '../controllers/admin.controller.js';
 import { listReports, resolveReport } from '../controllers/reports.controller.js';
+import {
+  listPosts,
+  deletePost,
+  listAnalyses,
+  analysesSummary,
+  affiliatePerformance,
+  listAdmins,
+  addAdmin,
+  removeAdmin,
+  listAudit,
+  getSystem,
+} from '../controllers/adminConsole.controller.js';
 
 const router = Router();
 
@@ -46,5 +58,25 @@ router.post('/users/:uid/set-admin', setUserAdmin);
 // Content moderation queue (user reports).
 router.get('/reports', listReports);
 router.post('/reports/:id/resolve', resolveReport);
+
+// Posts moderation.
+router.get('/posts', listPosts);
+router.delete('/posts/:id', deletePost);
+
+// Outfit analyses log.
+router.get('/analyses/summary', analysesSummary);
+router.get('/analyses', listAnalyses);
+
+// Affiliate performance.
+router.get('/affiliate/performance', affiliatePerformance);
+
+// Admin team.
+router.get('/admins', listAdmins);
+router.post('/admins', addAdmin);
+router.delete('/admins/:uid', removeAdmin);
+
+// Audit log + system info.
+router.get('/audit', listAudit);
+router.get('/system', getSystem);
 
 export default router;

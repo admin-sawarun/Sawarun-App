@@ -59,6 +59,23 @@ export const analyzeOutfit = asyncHandler(async (req, res) => {
       .collection('outfitHistory')
       .add({ ...result, createdAt: admin.firestore.FieldValue.serverTimestamp() });
     result.id = doc.id;
+
+    // Global log for the admin dashboard (fire-and-forget; never blocks the user).
+    try {
+      db.collection('analysesLog')
+        .add({
+          uid: req.user.uid,
+          historyId: doc.id,
+          fitScore: score,
+          topStyle: styleDna[0]?.category || null,
+          styleDna,
+          imageUrl,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        .catch((err) => console.warn('[analysis] analysesLog write failed:', err.code || '', err.message));
+    } catch (err) {
+      console.warn('[analysis] analysesLog write failed:', err.message);
+    }
   }
 
   // Dashboard counters (fire-and-forget; styleDna is sorted by percentage desc).
