@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { db, admin } from '../config/firebase.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { bumpDailyStats } from '../services/stats.service.js';
 
 /**
  * GET /api/affiliate/products
@@ -113,6 +114,7 @@ export const trackClick = asyncHandler(async (req, res) => {
     userId: req.user.uid,
     at: admin.firestore.FieldValue.serverTimestamp(),
   });
+  bumpDailyStats({ clicks: 1 });
 
   res.json({ ok: true, data: { websiteUrl: product.websiteUrl } });
 });

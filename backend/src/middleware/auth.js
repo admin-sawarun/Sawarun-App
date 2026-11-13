@@ -2,27 +2,33 @@ import { firebaseAuth, db, admin } from "../config/firebase.js";
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { isProd } from "../config/env.js";
+import { istDay, recordActiveDay } from "../services/stats.service.js";
 
 /**
  * Activity tracking for the admin "Daily Active Users" metric.
  * users/{uid}.lastActiveAt is written at most once per hour per uid (per
- * process). Fire-and-forget: it never blocks or fails the request.
+ * process), and also on the first request of a new IST day. Each write also
+ * marks activity/{YYYY-MM-DD IST}/users/{uid} for the daily-active time series.
+ * Fire-and-forget: it never blocks or fails the request.
  */
 const ACTIVITY_INTERVAL_MS = 60 * 60 * 1000;
 const lastActivityWrite = new Map();
 
 function recordActivity(uid) {
   const now = Date.now();
+  const day = istDay(new Date(now));
   const last = lastActivityWrite.get(uid);
-  if (last && now - last < ACTIVITY_INTERVAL_MS) return;
-  lastActivityWrite.set(uid, now);
+  if (last && now - last.at < ACTIVITY_INTERVAL_MS && last.day === day) return;
+  lastActivityWrite.set(uid, { at: now, day });
 
   // Keep the map from growing without bound on a long-lived process.
   if (lastActivityWrite.size > 50_000) {
-    for (const [key, at] of lastActivityWrite) {
-      if (now - at >= ACTIVITY_INTERVAL_MS) lastActivityWrite.delete(key);
+    for (const [key, entry] of lastActivityWrite) {
+      if (now - entry.at >= ACTIVITY_INTERVAL_MS) lastActivityWrite.delete(key);
     }
   }
+
+  recordActiveDay(uid);
 
   db.collection("users")
     .doc(uid)

@@ -1,0 +1,13 @@
+{
+  "projects": {
+    "default": "savarun-app-b775b"
+  },
+  "targets": {
+    "savarun-app-b775b": {
+      "hosting": {
+        "app": ["savarun-app-b775b"],
+        "admin": ["savarun-admin"]
+      }
+    }
+  }
+}

@@ -7,6 +7,7 @@ import { analyzeOutfitImage } from '../services/openaiVision.service.js';
 import { getWeights, computeFitScore } from '../services/fitScore.service.js';
 import { validateVisionResult, normalizeStyleDna } from '../services/analysisNormalizer.js';
 import { storeUpload, isAbsolute, userFolder } from '../services/storage.service.js';
+import { bumpDailyStats } from '../services/stats.service.js';
 
 /**
  * POST /api/analysis  (multipart, field "image")
@@ -59,6 +60,9 @@ export const analyzeOutfit = asyncHandler(async (req, res) => {
       .add({ ...result, createdAt: admin.firestore.FieldValue.serverTimestamp() });
     result.id = doc.id;
   }
+
+  // Dashboard counters (fire-and-forget; styleDna is sorted by percentage desc).
+  bumpDailyStats({ analyses: 1, style: styleDna[0]?.category });
 
   res.json({ ok: true, data: result });
 });

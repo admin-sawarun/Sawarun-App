@@ -54,8 +54,12 @@ GET    /api/affiliate/trending    ?limit=
 POST   /api/affiliate/click       { productId }        → { websiteUrl }
 
 # Admin  (auth + admin claim)
-GET    /api/admin/analytics
-POST   /api/admin/brands/:id/decision        { decision: 'approve'|'reject', note? }
+GET    /api/admin/analytics                  + totalPosts, totalAnalyses, activeToday, newUsersThisWeek
+GET    /api/admin/analytics/timeseries?days=30   (≤90) { days[], signups[], activeUsers[], analyses[], posts[], clicks[] }
+GET    /api/admin/users?q=&status=&limit=50&cursor=   → { data[], nextCursor }
+GET    /api/admin/users/:uid                 full detail: contact, claims, counts, recent posts/analyses
+GET    /api/admin/products?brandId=&category=
+POST   /api/admin/brands/:id/decision        { decision: 'approve'|'reject'|'revoked', note? }
 PATCH  /api/admin/products/:id/visibility     { hidden: boolean }
 PUT    /api/admin/featured-brand              { brandId }
 GET    /api/admin/fit-weights

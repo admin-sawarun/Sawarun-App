@@ -39,7 +39,7 @@ Collections the backend reads/writes. The Flutter app shares this same database
 ```
 {
   name, logoUrl, ownerUid,
-  status: "pending" | "approved" | "rejected",   // set by admin
+  status: "pending" | "approved" | "rejected" | "revoked",   // set by admin (revoked hides all its products)
   reviewNote, reviewedBy, reviewedAt
 }
 ```
@@ -51,6 +51,7 @@ Collections the backend reads/writes. The Flutter app shares this same database
   imageUrl, websiteUrl,
   category, categoryLower,        // categoryLower used for filtering
   approved: bool, hidden: bool,
+  hiddenByRevoke?: true,          // set when a brand revoke hid it; cleared (and un-hidden) on re-approve
   clicks: number, createdAt
 }
 ```
@@ -59,6 +60,13 @@ Collections the backend reads/writes. The Flutter app shares this same database
 ```
 { productId, brandId, userId, at }
 ```
+
+## Dashboard counters (server-written, days are IST `YYYY-MM-DD`)
+```
+activity/{day}/users/{uid} → { at }      // requireAuth, ≤ once/hour/uid + first request of each IST day
+statsDaily/{day}           → { analyses, clicks, styles: { "<Top Style>": n } }   // POST /api/analysis, POST /api/affiliate/click
+```
+Posts are created client-side, so post counts come from `posts.createdAt`.
 
 ## `reports/{autoId}`  ← written by `POST /api/reports`, resolved by admin
 ```

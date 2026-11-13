@@ -3,6 +3,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { adminOnly } from '../middleware/adminOnly.js';
 import {
   getAnalytics,
+  getTimeseries,
+  getUserDetail,
   listUsers,
   listBrands,
   listAllProducts,
@@ -23,8 +25,10 @@ const router = Router();
 router.use(requireAuth, adminOnly);
 
 router.get('/analytics', getAnalytics);
+router.get('/analytics/timeseries', getTimeseries);
 
 router.get('/users', listUsers);
+router.get('/users/:uid', getUserDetail);
 router.get('/brands', listBrands);
 router.get('/products', listAllProducts);
 
