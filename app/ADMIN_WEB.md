@@ -58,3 +58,19 @@ Since `hosting` is now a list of targets, deploy the consumer site with
 - **Granting admin:** use an existing admin's "Make admin" button (Users page),
   or set the custom claim with the Admin SDK. The new admin must sign out and
   back in.
+
+## Hosting on the Railway backend (current setup)
+
+The admin website is also served by the backend at
+`https://sawarun-app-production.up.railway.app/admin/`, so it needs no Firebase Hosting deploy.
+After changing anything in `lib/admin_web/`, rebuild and copy it into the backend, then commit and push:
+
+```
+cd app
+flutter build web -t lib/main_admin.dart --release --base-href /admin/ --output build/admin_rail --dart-define=BACKEND_URL=https://sawarun-app-production.up.railway.app
+rm -rf ../backend/public/admin && cp -r build/admin_rail ../backend/public/admin && rm -rf ../backend/public/admin/canvaskit
+```
+
+- In Git Bash, put `MSYS_NO_PATHCONV=1` before `flutter build` so `/admin/` isn't rewritten into a Windows path.
+- `canvaskit/` is removed because Flutter loads CanvasKit from the gstatic CDN. Keeping it adds about 37 MB.
+- `backend/src/app.js` drops the CSP header for `/admin` only, because Flutter web and Firebase Auth need it.

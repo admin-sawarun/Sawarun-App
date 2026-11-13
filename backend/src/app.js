@@ -54,6 +54,22 @@ export function createApp() {
   app.get('/account-deletion', page('account-deletion.html'));
   app.get('/child-safety', page('child-safety.html'));
 
+  // Admin website (Flutter web build of app/lib/main_admin.dart, built with
+  // --base-href /admin/ into public/admin; see app/ADMIN_WEB.md). helmet's
+  // default CSP would block Flutter's CanvasKit (gstatic CDN), WebAssembly
+  // and the Firebase Auth calls, so the CSP header is dropped for /admin only.
+  // Everything there is public static files; data comes from /api/admin,
+  // which requires an admin token.
+  const ADMIN_DIR = join(PUBLIC_DIR, 'admin');
+  app.use('/admin', (_req, res, next) => {
+    res.removeHeader('Content-Security-Policy');
+    next();
+  });
+  app.get('/admin', (req, res, next) => (req.path === '/admin' && !req.originalUrl.endsWith('/') ? res.redirect(301, '/admin/') : next()));
+  app.use('/admin', express.static(ADMIN_DIR, { index: 'index.html', maxAge: '1h' }));
+  // SPA fallback (the site uses #/ routes, but keep deep links safe).
+  app.get(/^\/admin\/.*/, (_req, res) => res.sendFile(join(ADMIN_DIR, 'index.html')));
+
   // All API endpoints live under /api and share the general rate limiter.
   app.use('/api', apiLimiter, apiRoutes);
 
