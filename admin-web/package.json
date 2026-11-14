@@ -1,0 +1,12 @@
+{
+  "name": "savarun-admin-web",
+  "private": true,
+  "type": "module",
+  "description": "Static server for the Savarun admin website (admin.savarun.com)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
