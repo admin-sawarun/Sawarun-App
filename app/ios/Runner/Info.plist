@@ -9,7 +9,36 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Savarun needs photo access so you can upload outfits and wardrobe items.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Not used — camera capture only.</string>
+	<string>Savarun takes photos only and never records audio. iOS lists this because the camera feature can also record video.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<!-- Google sign-in (Firebase signInWithProvider): REVERSED_CLIENT_ID of the iOS OAuth client in firebase_options.dart. -->
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.967966230694-3tr50ib7kpnoa10d5haca7tdtqhr02lc</string>
+			</array>
+		</dict>
+		<!-- Firebase phone auth reCAPTCHA fallback: the encoded iOS app ID. -->
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app-1-967966230694-ios-cd8aeabb2458a031160c67</string>
+			</array>
+		</dict>
+	</array>
+	<!-- url_launcher: legal pages and the support email. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>mailto</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -59,18 +88,10 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<!-- iPhone only (TARGETED_DEVICE_FAMILY = 1), portrait: the screens and the camera are built for portrait. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 </dict>
 </plist>

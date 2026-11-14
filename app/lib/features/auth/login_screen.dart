@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,12 +19,19 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _busy = false;
 
+  /// Sign in with Apple is offered on iOS, where App Store guideline 4.8
+  /// requires it next to Google sign-in. Android keeps Google and phone only.
+  static bool get _showApple =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
   Future<void> _run(Future<void> Function() action, String label) async {
     setState(() => _busy = true);
     try {
       await action();
       // Router redirect sends us to Home once the auth state updates.
     } on FirebaseAuthException catch (e) {
+      // Closing the Apple or Google sheet is not an error worth showing.
+      if (e.code == 'canceled' || e.code == 'web-context-canceled') return;
       _showError(e.message ?? '$label sign-in failed');
     } catch (e) {
       _showError('$label sign-in failed: $e');
@@ -67,6 +75,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     style: TextStyle(fontSize: 14, color: AppColors.inkMuted),
                   ),
                   const Spacer(flex: 2),
+                  if (_showApple) ...[
+                    _AuthButton(
+                      icon: Icons.apple,
+                      iconColor: AppColors.ink,
+                      label: 'Continue with Apple',
+                      onTap: _busy
+                          ? null
+                          : () => _run(auth.signInWithApple, 'Apple'),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
                   _AuthButton(
                     icon: Icons.g_mobiledata_rounded,
                     iconColor: AppColors.danger,

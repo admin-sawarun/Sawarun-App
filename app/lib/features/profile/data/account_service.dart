@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/app_config.dart';
@@ -22,6 +23,7 @@ class AccountRepository {
   /// Permanently deletes the signed-in account and all its data on the
   /// backend (DELETE /api/users/me), then signs out locally.
   Future<void> deleteMyAccount() async {
+    await _revokeAppleSignIn();
     try {
       await const ApiClient().delete('${AppConfig.backendBaseUrl}/api/users/me');
     } on ApiException catch (e) {
@@ -38,5 +40,29 @@ class AccountRepository {
     try {
       await FirebaseAuth.instance.signOut();
     } catch (_) {}
+  }
+
+  /// App Store guideline 5.1.1(v): deleting an account that uses Sign in
+  /// with Apple must also revoke the app's Apple tokens. Apple only hands out
+  /// the authorization code needed for that at sign-in, so the user confirms
+  /// with Apple once more. Cancelling stops the deletion.
+  Future<void> _revokeAppleSignIn() async {
+    final auth = FirebaseAuth.instance;
+    final user = auth.currentUser;
+    if (user == null) return;
+    final usesApple = user.providerData.any((p) => p.providerId == 'apple.com');
+    if (!usesApple || kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return;
+
+    final UserCredential cred;
+    try {
+      cred = await user.reauthenticateWithProvider(AppleAuthProvider());
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'canceled' || e.code == 'web-context-canceled') {
+        throw Exception('Apple confirmation was cancelled, so the account was not deleted.');
+      }
+      rethrow;
+    }
+    final code = cred.additionalUserInfo?.authorizationCode;
+    if (code != null) await auth.revokeTokenWithAuthorizationCode(code);
   }
 }
