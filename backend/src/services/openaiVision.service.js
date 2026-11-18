@@ -1,4 +1,4 @@
-import { openai, VISION_MODEL, AI_PROVIDER } from '../config/openai.js';
+import { openai, VISION_MODEL } from '../config/openai.js';
 import { ApiError } from '../utils/ApiError.js';
 
 /**
@@ -35,7 +35,19 @@ Respond with ONLY a JSON object in EXACTLY this shape:
       { "type": "add | swap | keep", "text": "string" }   // the "prescription": specific, trend-aware moves — mention concrete pieces, colours, or styling
     ],
     "styleTips": ["string"]              // 4-5 warm "you'd look even better if..." ideas — concrete accessories, colours or pieces (e.g. "A silver watch would elevate this", "Black sneakers would sharpen the look")
-  }
+  },
+  "combinations": [
+    {
+      "title": "string",                 // name of an ALTERNATIVE outfit idea, e.g. "Smart Casual Switch-up"
+      "pieces": [
+        {
+          "category": "Tops | Bottoms | Footwear | Outerwear | Accessories",  // MUST be exactly one of these
+          "color": "string",             // colour name, e.g. "White", "Beige", "Navy"
+          "note": "string"               // short reason, e.g. "a crisp white shirt sharpens the look"
+        }
+      ]
+    }
+  ]
 }
 
 Rules:
@@ -45,7 +57,8 @@ Rules:
 - Write suggestions like a stylist's prescription: concrete and trend-aware (e.g. "Swap the white sneakers for chunky dad-sneakers — they're big this season"). Include at least one "keep" for what already works.
 - "trend" must reference real, current fashion directions relevant to THIS outfit's style.
 - "styleTips" are encouraging, personalised "you'd look even better if…" ideas — each names a concrete accessory, colour, or piece (a watch, a chain, black shoes, a specific colour). Keep them positive and specific.
-- If the image has no recognisable outfit/person, set every factorScore to 0, put an explanation in feedback.summary, set trend to "", and styleTips to [].`;
+- "combinations": give 2-3 ALTERNATIVE outfit ideas the wearer could try next, each with a short title and 2-4 pieces. Every piece's "category" MUST be exactly one of: Tops, Bottoms, Footwear, Outerwear, Accessories (so the app can match the user's own wardrobe). Use everyday colour names. Keep the "note" to one short clause.
+- If the image has no recognisable outfit/person, set every factorScore to 0, put an explanation in feedback.summary, set trend to "", set styleTips to [] and combinations to [].`;
 
 /**
  * Call GPT-4o Vision on an outfit image.
@@ -59,14 +72,8 @@ export async function analyzeOutfitImage(imageUrl) {
       model: VISION_MODEL,
       temperature: 0.4,
       max_tokens: 2000,
-      // Force a JSON-only reply. Groq's vision model is a reasoning model whose
-      // thinking tokens count against max_tokens — leaving it on truncates the
-      // answer and Groq rejects it with "Failed to validate JSON". Turning
-      // reasoning off keeps the response short and strictly parseable.
+      // Force a JSON-only reply so the response is strictly parseable.
       response_format: { type: 'json_object' },
-      ...(AI_PROVIDER === 'groq'
-        ? { reasoning_effort: 'none', reasoning_format: 'hidden' }
-        : {}),
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         {
@@ -116,9 +123,6 @@ export async function tagClothingImage(imageUrl) {
       temperature: 0.2,
       max_tokens: 600,
       response_format: { type: 'json_object' },
-      ...(AI_PROVIDER === 'groq'
-        ? { reasoning_effort: 'none', reasoning_format: 'hidden' }
-        : {}),
       messages: [
         { role: 'system', content: TAG_PROMPT },
         {

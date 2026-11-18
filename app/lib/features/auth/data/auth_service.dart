@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_platform_interface/firebase_auth_platform_interface.dart'
     show FirebaseAuthPlatform;
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 /// Wraps Firebase Auth for Savarun — Google, Apple and Phone OTP — and makes sure a
 /// matching `users/{uid}` profile document exists in Firestore on first login.
@@ -18,11 +19,31 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
 
   // ── Google ──
+  /// On mobile this uses the NATIVE Google account-picker (the device's email
+  /// list) via `google_sign_in`, then hands the credential to Firebase — so
+  /// there is no browser/Custom-Tab redirect. On web we use the popup.
   Future<void> signInWithGoogle() async {
-    final provider = GoogleAuthProvider();
-    final cred = kIsWeb
-        ? await _auth.signInWithPopup(provider)
-        : await _auth.signInWithProvider(provider);
+    if (kIsWeb) {
+      final provider = GoogleAuthProvider();
+      final cred = await _auth.signInWithPopup(provider);
+      await _ensureUserDoc(cred.user);
+      return;
+    }
+
+    final googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) {
+      // The user closed the account picker — treat as a cancel, not an error.
+      throw FirebaseAuthException(
+        code: 'canceled',
+        message: 'Google sign-in was cancelled',
+      );
+    }
+    final googleAuth = await googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+    final cred = await _auth.signInWithCredential(credential);
     await _ensureUserDoc(cred.user);
   }
 
@@ -86,7 +107,18 @@ class AuthService {
     await _ensureUserDoc(userCred.user);
   }
 
-  Future<void> signOut() => _auth.signOut();
+  Future<void> signOut() async {
+    // Clear the cached Google account too, so the next sign-in shows the
+    // account picker again instead of silently reusing the last one.
+    if (!kIsWeb) {
+      try {
+        await GoogleSignIn().signOut();
+      } catch (_) {
+        // Non-fatal — Firebase sign-out below is what matters.
+      }
+    }
+    await _auth.signOut();
+  }
 
   /// Create the user's profile doc the first time they sign in.
   ///

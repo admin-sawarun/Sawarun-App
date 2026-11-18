@@ -10,6 +10,7 @@ import 'widgets/admin_users_tab.dart';
 import 'widgets/admin_brands_tab.dart';
 import 'widgets/admin_products_tab.dart';
 import 'widgets/admin_reports_tab.dart';
+import 'widgets/admin_trending_tab.dart';
 import 'widgets/admin_weights_tab.dart';
 
 /// Admin Dashboard (Module 5). Runs in the same Flutter app — on web for the
@@ -75,6 +76,7 @@ class _Dashboard extends StatelessWidget {
     Tab(text: 'Users'),
     Tab(text: 'Brands'),
     Tab(text: 'Products'),
+    Tab(text: 'Trending'),
     Tab(text: 'Reports'),
     Tab(text: 'AI Weights'),
   ];
@@ -120,6 +122,7 @@ class _Dashboard extends StatelessWidget {
                 AdminUsersTab(),
                 AdminBrandsTab(),
                 AdminProductsTab(),
+                AdminTrendingTab(),
                 AdminReportsTab(),
                 AdminWeightsTab(),
               ],

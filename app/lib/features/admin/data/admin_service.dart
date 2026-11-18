@@ -125,6 +125,40 @@ class AdminProduct {
       );
 }
 
+/// An admin-curated Trending Fashion card (CR-1), as the admin panel sees it
+/// (includes the affiliate link + hidden flag, unlike the public feed).
+class AdminTrendingItem {
+  const AdminTrendingItem({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.imageUrl,
+    required this.affiliateUrl,
+    required this.order,
+    required this.hidden,
+    required this.clicks,
+  });
+  final String id;
+  final String title;
+  final String subtitle;
+  final String imageUrl;
+  final String affiliateUrl;
+  final int order;
+  final bool hidden;
+  final int clicks;
+
+  factory AdminTrendingItem.fromJson(Map<String, dynamic> d) => AdminTrendingItem(
+        id: (d['id'] ?? '').toString(),
+        title: (d['title'] ?? '').toString(),
+        subtitle: (d['subtitle'] ?? '').toString(),
+        imageUrl: (d['imageUrl'] ?? '').toString(),
+        affiliateUrl: (d['affiliateUrl'] ?? '').toString(),
+        order: (d['order'] ?? 0) as int,
+        hidden: d['hidden'] == true,
+        clicks: (d['clicks'] ?? 0) as int,
+      );
+}
+
 class AdminReport {
   const AdminReport({
     required this.id,
@@ -236,6 +270,16 @@ final adminReportsProvider = FutureProvider.autoDispose
       .toList();
 });
 
+/// Trending Fashion cards for the admin panel (all, incl. hidden).
+final adminTrendingFashionProvider =
+    FutureProvider.autoDispose<List<AdminTrendingItem>>((ref) async {
+  const client = ApiClient();
+  final json = await client.get(_admin('/trending-fashion'));
+  return (json['data'] as List)
+      .map((e) => AdminTrendingItem.fromJson(e as Map<String, dynamic>))
+      .toList();
+});
+
 final adminRepoProvider = Provider((ref) => const AdminRepository());
 
 class AdminRepository {
@@ -264,4 +308,27 @@ class AdminRepository {
 
   Future<void> saveFitWeights(Map<String, num> weights) =>
       const ApiClient().put(_admin('/fit-weights'), weights);
+
+  /* ── Trending Fashion (CR-1) ── */
+
+  Future<void> createTrending({
+    required String title,
+    String subtitle = '',
+    String imageUrl = '',
+    required String affiliateUrl,
+    int order = 0,
+  }) =>
+      const ApiClient().post(_admin('/trending-fashion'), {
+        'title': title,
+        'subtitle': subtitle,
+        'imageUrl': imageUrl,
+        'affiliateUrl': affiliateUrl,
+        'order': order,
+      });
+
+  Future<void> updateTrending(String id, Map<String, dynamic> fields) =>
+      const ApiClient().patch(_admin('/trending-fashion/$id'), fields);
+
+  Future<void> deleteTrending(String id) =>
+      const ApiClient().delete(_admin('/trending-fashion/$id'));
 }

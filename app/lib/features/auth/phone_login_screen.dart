@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_assets.dart';
 import '../../core/theme/app_colors.dart';
 import 'data/auth_providers.dart';
 import 'data/countries.dart';
@@ -79,6 +82,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   }
 
   Future<void> _sendOtp() async {
+    if (_busy) return; // ignore extra taps while a request is in flight
     final error = _validatePhone();
     if (error != null) {
       _toast(error);
@@ -90,23 +94,36 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
     try {
       if (kIsWeb) {
         _webConfirmation = await auth.sendOtpWeb(_phoneE164);
+        if (mounted) setState(() => _busy = false);
         _goToOtp();
       } else {
+        // On mobile verifyPhoneNumber returns almost immediately, but the SMS
+        // is only really "sent" when codeSent fires. So we keep the loader
+        // running until a callback below arrives — not when this await ends.
         await auth.sendOtpMobile(
           _phoneE164,
           onCodeSent: (id) {
             _verificationId = id;
+            if (mounted) setState(() => _busy = false);
             _goToOtp();
           },
-          onFailed: (e) => _toast(e.message ?? 'Could not send OTP'),
+          onFailed: (e) {
+            if (mounted) setState(() => _busy = false);
+            _toast(e.message ?? 'Could not send OTP');
+          },
+          onAutoVerified: (_) {
+            // Auto-verification signs the user in; the router redirects. Just
+            // clear the loader in case we're still on this screen.
+            if (mounted) setState(() => _busy = false);
+          },
         );
       }
     } on FirebaseAuthException catch (e) {
+      if (mounted) setState(() => _busy = false);
       _toast(e.message ?? 'Could not send OTP');
     } catch (e) {
-      _toast('Could not send OTP: $e');
-    } finally {
       if (mounted) setState(() => _busy = false);
+      _toast('Could not send OTP: $e');
     }
   }
 
@@ -180,18 +197,17 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
         ),
       ),
       body: SafeArea(
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+        // Centered vertically (client wanted the form in the middle), but in a
+        // scroll view so it never overflows when the keyboard opens. Only ONE
+        // loader runs — the dots inside the button.
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight - 32),
               child: isPhone ? _phoneStep() : _otpStep(),
             ),
-            if (_busy)
-              const ColoredBox(
-                color: Color(0x33000000),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-          ],
+          ),
         ),
       ),
     );
@@ -199,19 +215,23 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
 
   Widget _phoneStep() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 20),
-        const Text('Enter your\nphone number',
+        const _BrandHeader(),
+        const SizedBox(height: 36),
+        const Text('Enter your phone number',
+            textAlign: TextAlign.center,
             style: TextStyle(
-                fontSize: 26,
+                fontSize: 24,
                 height: 1.25,
                 fontWeight: FontWeight.w700,
                 color: AppColors.ink)),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         const Text("We'll send you a 6-digit verification code.",
+            textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: AppColors.inkMuted)),
-        const SizedBox(height: 32),
+        const SizedBox(height: 28),
         TextField(
           controller: _phoneController,
           keyboardType: TextInputType.phone,
@@ -253,16 +273,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
         const SizedBox(height: 24),
         ElevatedButton(
           onPressed: _busy ? null : _sendOtp,
-          child: _busy
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    valueColor: AlwaysStoppedAnimation(AppColors.white),
-                  ),
-                )
-              : const Text('Send OTP'),
+          child: _busy ? const _LoadingDots() : const Text('Send OTP'),
         ),
         // reCAPTCHA (web) renders here automatically when needed.
       ],
@@ -271,20 +282,24 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
 
   Widget _otpStep() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 20),
+        const _BrandHeader(),
+        const SizedBox(height: 36),
         const Text('Enter the code',
+            textAlign: TextAlign.center,
             style: TextStyle(
-                fontSize: 26,
+                fontSize: 24,
                 fontWeight: FontWeight.w700,
                 color: AppColors.ink)),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Text(
           _isDemo ? 'Verifying automatically…' : 'Sent to $_phoneE164',
+          textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 14, color: AppColors.inkMuted),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 28),
         TextField(
           controller: _otpController,
           keyboardType: TextInputType.number,
@@ -299,16 +314,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
         const SizedBox(height: 24),
         ElevatedButton(
           onPressed: _busy ? null : _verifyOtp,
-          child: _busy
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    valueColor: AlwaysStoppedAnimation(AppColors.white),
-                  ),
-                )
-              : const Text('Verify & Continue'),
+          child: _busy ? const _LoadingDots() : const Text('Verify & Continue'),
         ),
         const SizedBox(height: 12),
         Center(
@@ -318,6 +324,103 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Logo + brand name shown at the top of the phone and OTP screens (CR-6), so
+/// the pages don't look empty.
+class _BrandHeader extends StatelessWidget {
+  const _BrandHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Image.asset(AppAssets.logoMark, height: 54),
+        const SizedBox(height: 12),
+        const Text(
+          'SAVARUN',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 3,
+            color: AppColors.ink,
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'AI Fashion & Style',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+            color: AppColors.primary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Three dots that bounce up and down — the in-button loader shown while an
+/// OTP is being sent or verified (CR-4). One continuous loader, inside the
+/// button, so it's obvious the tap registered.
+class _LoadingDots extends StatefulWidget {
+  const _LoadingDots();
+
+  @override
+  State<_LoadingDots> createState() => _LoadingDotsState();
+}
+
+class _LoadingDotsState extends State<_LoadingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1000),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  static const double s = 7;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: s * 2.4,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(3, (i) {
+              // Each dot is a fifth of a cycle behind the one before it, so the
+              // bounce travels left-to-right like a wave.
+              final t = (_c.value + i * 0.2) % 1.0;
+              final dy = -math.sin(t * math.pi) * s;
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: s * 0.35),
+                child: Transform.translate(
+                  offset: Offset(0, dy),
+                  child: Container(
+                    width: s,
+                    height: s,
+                    decoration: const BoxDecoration(
+                      color: AppColors.white,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          );
+        },
+      ),
     );
   }
 }

@@ -35,6 +35,39 @@ class Suggestion {
   final String text;
 }
 
+/// One piece inside an alternative outfit idea (an AI "other combination").
+class CombinationPiece {
+  const CombinationPiece({
+    required this.category,
+    required this.color,
+    required this.note,
+  });
+  final String category; // Tops | Bottoms | Footwear | Outerwear | Accessories
+  final String color; // colour name, e.g. "White"
+  final String note; // short reason
+
+  factory CombinationPiece.fromJson(Map<String, dynamic> d) => CombinationPiece(
+        category: (d['category'] ?? '').toString(),
+        color: (d['color'] ?? '').toString(),
+        note: (d['note'] ?? '').toString(),
+      );
+}
+
+/// An alternative outfit the user could try next, matched to their wardrobe.
+class OutfitCombination {
+  const OutfitCombination({required this.title, required this.pieces});
+  final String title;
+  final List<CombinationPiece> pieces;
+
+  factory OutfitCombination.fromJson(Map<String, dynamic> d) => OutfitCombination(
+        title: (d['title'] ?? '').toString(),
+        pieces: (d['pieces'] as List? ?? [])
+            .whereType<Map>()
+            .map((p) => CombinationPiece.fromJson(Map<String, dynamic>.from(p)))
+            .toList(),
+      );
+}
+
 /// The full result of analyzing one outfit photo (from the backend).
 class OutfitAnalysis {
   const OutfitAnalysis({
@@ -51,6 +84,7 @@ class OutfitAnalysis {
     required this.trend,
     required this.suggestions,
     required this.styleTips,
+    this.combinations = const [],
     this.imageUrl,
   });
 
@@ -71,6 +105,10 @@ class OutfitAnalysis {
 
   /// "You'd look even better if…" ideas, shown behind the Suggestions button.
   final List<String> styleTips;
+
+  /// Alternative outfit ideas, matched against the user's wardrobe on the
+  /// "Complete the Look" page.
+  final List<OutfitCombination> combinations;
   final String? imageUrl;
 
   /// Style DNA slice colours, following the design's purple → sage scale.
@@ -132,6 +170,10 @@ class OutfitAnalysis {
           .map((s) => Suggestion(s['type'] ?? 'keep', s['text'] ?? ''))
           .toList(),
       styleTips: List<String>.from(fb['styleTips'] ?? const []),
+      combinations: (d['combinations'] as List? ?? [])
+          .whereType<Map>()
+          .map((c) => OutfitCombination.fromJson(Map<String, dynamic>.from(c)))
+          .toList(),
       imageUrl: d['imageUrl'],
     );
   }

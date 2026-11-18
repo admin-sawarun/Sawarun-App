@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'models/outfit_analysis.dart';
+import 'widgets/factor_radar_chart.dart';
 
 /// The detailed breakdown behind the Fit Score — the spec's five weighted
 /// factors plus everything the vision model detected.
@@ -19,6 +20,13 @@ class FullReportScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
         children: [
+          if (a.factors.length >= 3) ...[
+            _Card(
+              title: 'Score Radar',
+              child: FactorRadarChart(factors: a.factors),
+            ),
+            const SizedBox(height: 16),
+          ],
           _Card(
             title: 'Score Breakdown',
             child: Column(

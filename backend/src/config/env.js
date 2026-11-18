@@ -51,15 +51,9 @@ export const env = {
     driver: optional('STORAGE_DRIVER', 'local'),
   },
 
-  // AI vision provider. Groq is OpenAI-compatible, so we reuse the OpenAI SDK
-  // with a different base URL. Switch provider via AI_PROVIDER (groq | openai).
+  // AI vision via OpenAI GPT-4o Vision. OpenAI is the only provider.
   ai: {
-    provider: optional('AI_PROVIDER', 'groq'),
-    groq: {
-      apiKey: optional('GROQ_API_KEY'),
-      baseUrl: 'https://api.groq.com/openai/v1',
-      visionModel: optional('GROQ_VISION_MODEL', 'qwen/qwen3.6-27b'),
-    },
+    provider: 'openai',
     openai: {
       apiKey: optional('OPENAI_API_KEY'),
       baseUrl: undefined, // SDK default

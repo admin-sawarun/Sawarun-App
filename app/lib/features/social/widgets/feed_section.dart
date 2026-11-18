@@ -65,34 +65,45 @@ class _PostCard extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                GestureDetector(
-                  onTap: () =>
-                      context.push(Routes.otherProfile, extra: post.authorUid),
-                  child: CircleAvatar(
-                    radius: 18,
-                    backgroundColor: AppColors.surface,
-                    backgroundImage: post.authorPhoto.isNotEmpty
-                        ? NetworkImage(post.authorPhoto)
-                        : null,
-                    child: post.authorPhoto.isEmpty
-                        ? const Icon(Icons.person_outline_rounded,
-                            size: 18, color: AppColors.inkMuted)
-                        : null,
-                  ),
-                ),
-                const SizedBox(width: 10),
+                // Avatar + name together open the author's profile.
                 Expanded(
-                  child: Text(
-                    post.authorName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(24),
+                    onTap: post.authorUid.isEmpty
+                        ? null
+                        : () => context.push(Routes.otherProfile,
+                            extra: post.authorUid),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: AppColors.surface,
+                          backgroundImage: post.authorPhoto.isNotEmpty
+                              ? NetworkImage(post.authorPhoto)
+                              : null,
+                          child: post.authorPhoto.isEmpty
+                              ? const Icon(Icons.person_outline_rounded,
+                                  size: 18, color: AppColors.inkMuted)
+                              : null,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            post.authorName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 if (post.fitScore != null)
                   Container(
                     padding:
@@ -168,7 +179,17 @@ class _LikeButton extends ConsumerWidget {
     final liked = ref.watch(hasLikedProvider(post.id)).value ?? false;
 
     return TextButton.icon(
-      onPressed: () => ref.read(feedRepoProvider).toggleLike(post.id, !liked),
+      onPressed: () async {
+        try {
+          await ref.read(feedRepoProvider).toggleLike(post.id, !liked);
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not update like: $e')),
+            );
+          }
+        }
+      },
       style: TextButton.styleFrom(
         foregroundColor: liked ? AppColors.danger : AppColors.inkMuted,
         padding: const EdgeInsets.symmetric(horizontal: 8),

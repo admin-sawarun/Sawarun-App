@@ -1,6 +1,3 @@
-import 'dart:math' as math;
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,7 +7,9 @@ import '../../core/theme/app_colors.dart';
 import '../analysis/data/history_providers.dart';
 import '../profile/data/profile_providers.dart';
 import '../shop/data/shop_providers.dart';
+import '../shop/trending_fashion_screen.dart';
 import '../social/widgets/feed_section.dart';
+import 'camera_3d.dart';
 
 /// Home — the design's greeting, the big "Analyze Outfit" orb, and a strip of
 /// recent analyses.
@@ -81,10 +80,9 @@ class HomeScreen extends ConsumerWidget {
               color: AppColors.inkMuted,
             ),
           ),
-          const SizedBox(height: 32),
-          Center(
-            child: _AnalyzeOrb(onTap: () => context.push(Routes.camera)),
-          ),
+          const SizedBox(height: 24),
+          // Tap the 3D camera itself to open the camera and analyze an outfit.
+          Camera3DHero(onTap: () => context.push(Routes.camera)),
           const SizedBox(height: 40),
           Row(
             children: [
@@ -107,6 +105,8 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 8),
           const _RecentStrip(),
           const SizedBox(height: 32),
+          const TrendingFashionSection(),
+          const SizedBox(height: 32),
           const _TrendingBrands(),
           const SizedBox(height: 32),
           const FeedSection(),
@@ -120,172 +120,6 @@ class HomeScreen extends ConsumerWidget {
     if (hour < 12) return 'Good Morning';
     if (hour < 17) return 'Good Afternoon';
     return 'Good Evening';
-  }
-}
-
-/// The design's hero: a dark orb sitting on soft drifting blobs. The blobs
-/// breathe continuously and the orb dips on press.
-class _AnalyzeOrb extends StatefulWidget {
-  const _AnalyzeOrb({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  State<_AnalyzeOrb> createState() => _AnalyzeOrbState();
-}
-
-class _AnalyzeOrbState extends State<_AnalyzeOrb>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _drift;
-  bool _pressed = false;
-
-  static const _size = 280.0;
-  static const _orbSize = 168.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _drift = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 7),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _drift.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      child: SizedBox(
-        width: _size,
-        height: _size,
-        child: AnimatedBuilder(
-          animation: _drift,
-          builder: (context, child) {
-            // One slow cycle drives both blobs, half a turn apart, so the
-            // cluster gently swells and shifts instead of spinning.
-            final t = _drift.value * 2 * math.pi;
-            final swell = 1 + math.sin(t) * 0.05;
-
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                _blob(
-                  color: AppColors.lilac,
-                  diameter: _size * 0.86 * swell,
-                  offset: Offset(math.cos(t) * 12 - 18, math.sin(t) * 12),
-                  opacity: 0.55,
-                ),
-                _blob(
-                  color: AppColors.white,
-                  diameter: _size * 0.78 / swell,
-                  offset: Offset(math.cos(t + math.pi) * 14 + 22,
-                      math.sin(t + math.pi) * 10),
-                  opacity: 0.9,
-                ),
-                _blob(
-                  color: AppColors.primaryLight,
-                  diameter: _size * 0.66 * swell,
-                  offset: Offset(math.sin(t) * 10, math.cos(t) * 8 + 6),
-                  opacity: 0.45,
-                ),
-                child!,
-              ],
-            );
-          },
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              AnimatedScale(
-                scale: _pressed ? 0.94 : 1,
-                duration: const Duration(milliseconds: 140),
-                curve: Curves.easeOut,
-                child: Container(
-                  width: _orbSize,
-                  height: _orbSize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF232041), Color(0xFF15132B)],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primaryDeep.withValues(alpha: 0.28),
-                        blurRadius: 30,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.center_focus_weak_rounded,
-                          color: AppColors.white, size: 28),
-                      SizedBox(height: 12),
-                      Text(
-                        'ANALYZE',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.6,
-                        ),
-                      ),
-                      Text(
-                        'OUTFIT',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.6,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              // The design's small sparkle sitting off the orb's right edge.
-              const Positioned(
-                right: 6,
-                child: Icon(Icons.auto_awesome_rounded,
-                    size: 20, color: AppColors.ink),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _blob({
-    required Color color,
-    required double diameter,
-    required Offset offset,
-    required double opacity,
-  }) {
-    return Transform.translate(
-      offset: offset,
-      child: ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          width: diameter,
-          height: diameter,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withValues(alpha: opacity),
-          ),
-        ),
-      ),
-    );
   }
 }
 

@@ -25,6 +25,7 @@ import '../../features/wardrobe/bulk_add_screen.dart';
 import '../../features/wardrobe/data/wardrobe_models.dart';
 import '../../features/shop/product_details_screen.dart';
 import '../../features/shop/sell_on_savarun_screen.dart';
+import '../../features/shop/trending_fashion_screen.dart';
 import '../../features/shop/data/shop_providers.dart';
 import '../../features/wardrobe/outfit_combos_screen.dart';
 import '../../features/wardrobe/create_outfit_screen.dart';
@@ -59,6 +60,7 @@ class Routes {
   static const itemDetails = '/item-details';
   static const productDetails = '/product';
   static const sellOnSavarun = '/sell';
+  static const trendingFashion = '/trending-fashion';
   static const outfitCombos = '/outfit-combos';
   static const createOutfit = '/create-outfit';
   static const explore = '/explore';
@@ -112,6 +114,7 @@ final appRouter = GoRouter(
     GoRoute(path: Routes.itemDetails, builder: (c, s) => ItemDetailsScreen(item: s.extra as WardrobeItem)),
     GoRoute(path: Routes.productDetails, builder: (c, s) => ProductDetailsScreen(product: s.extra as Product)),
     GoRoute(path: Routes.sellOnSavarun, builder: (c, s) => const SellOnSavarunScreen()),
+    GoRoute(path: Routes.trendingFashion, builder: (c, s) => const TrendingFashionScreen()),
     GoRoute(path: Routes.outfitCombos, builder: (c, s) => const OutfitCombosScreen()),
     GoRoute(path: Routes.createOutfit, builder: (c, s) => const CreateOutfitScreen()),
     GoRoute(path: Routes.explore, builder: (c, s) => const ExploreScreen()),

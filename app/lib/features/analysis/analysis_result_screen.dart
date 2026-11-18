@@ -7,6 +7,8 @@ import '../../core/theme/app_colors.dart';
 import '../social/data/report_service.dart';
 import '../social/widgets/report_sheet.dart';
 import 'models/outfit_analysis.dart';
+import 'widgets/combinations_view.dart';
+import 'widgets/factor_radar_chart.dart';
 import 'widgets/score_blob.dart';
 import 'widgets/style_dna_view.dart';
 
@@ -38,6 +40,9 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen> {
       _FitScorePage(analysis: a),
       if (hasDna) StyleDnaView(analysis: a),
       _FeedbackPage(analysis: a),
+      // CR-2: "Complete the Look" — other combinations matched to the user's
+      // wardrobe, plus inspiration. Shown when there's anything to put on it.
+      if (a.combinations.isNotEmpty || hasDna) CombinationsView(analysis: a),
     ];
 
     return Scaffold(
@@ -98,11 +103,15 @@ class _FitScorePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final a = analysis;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Column(
-        children: [
-          const Text(
+    final showRadar = a.fitScore > 0 && a.factors.length >= 3;
+
+    // Scrollable so the ring, the radar graphic and the palette all fit on any
+    // screen size without overflowing.
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(28, 10, 28, 20),
+      children: [
+        const Center(
+          child: Text(
             'Your Fit Score',
             style: TextStyle(
               fontSize: 15,
@@ -110,10 +119,12 @@ class _FitScorePage extends StatelessWidget {
               color: AppColors.ink,
             ),
           ),
-          const Spacer(),
-          ScoreBlob(score: a.fitScore),
-          const Spacer(),
-          Text(
+        ),
+        const SizedBox(height: 18),
+        Center(child: ScoreBlob(score: a.fitScore)),
+        const SizedBox(height: 18),
+        Center(
+          child: Text(
             _headline(a.fitScore),
             textAlign: TextAlign.center,
             style: const TextStyle(
@@ -122,42 +133,62 @@ class _FitScorePage extends StatelessWidget {
               color: AppColors.ink,
             ),
           ),
-          if (a.summary.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              a.summary,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                height: 1.5,
+        ),
+        if (a.summary.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            a.summary,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: AppColors.inkMuted,
+            ),
+          ),
+        ],
+        // Radar/spider graphic of the five scoring factors.
+        if (showRadar) ...[
+          const SizedBox(height: 22),
+          const Center(
+            child: Text(
+              'SCORE BREAKDOWN',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
                 color: AppColors.inkMuted,
               ),
             ),
-          ],
-          const Spacer(),
-          ElevatedButton(
-            onPressed: () => context.push(Routes.fullReport, extra: a),
-            child: const Text('See Full Report'),
           ),
-          const SizedBox(height: 12),
-          // Share this look to the home feed (Module 3). Only offer it when
-          // the analysis has a stored image to post.
-          if ((a.imageUrl ?? '').isNotEmpty)
-            OutlinedButton.icon(
-              onPressed: () => context.push(
-                Routes.shareOutfit,
-                extra: (
-                  a.imageUrl,
-                  a.fitScore,
-                  a.styleDna.isNotEmpty ? a.styleDna.first.style : null,
-                ),
-              ),
-              icon: const Icon(Icons.ios_share_rounded, size: 18),
-              label: const Text('Share to Feed'),
-            ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          FactorRadarChart(factors: a.factors),
         ],
-      ),
+        if (a.palette.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          _PaletteStrip(palette: a.palette),
+        ],
+        const SizedBox(height: 26),
+        ElevatedButton(
+          onPressed: () => context.push(Routes.fullReport, extra: a),
+          child: const Text('See Full Report'),
+        ),
+        const SizedBox(height: 12),
+        // Share this look to the home feed (Module 3). Only offer it when
+        // the analysis has a stored image to post.
+        if ((a.imageUrl ?? '').isNotEmpty)
+          OutlinedButton.icon(
+            onPressed: () => context.push(
+              Routes.shareOutfit,
+              extra: (
+                a.imageUrl,
+                a.fitScore,
+                a.styleDna.isNotEmpty ? a.styleDna.first.style : null,
+              ),
+            ),
+            icon: const Icon(Icons.ios_share_rounded, size: 18),
+            label: const Text('Share to Feed'),
+          ),
+      ],
     );
   }
 
@@ -385,6 +416,75 @@ class _FeedbackPage extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Colour palette shown as a soft row of swatches under the Fit Score — a
+/// quick, graphical read of the outfit's colours (CR-2).
+class _PaletteStrip extends StatelessWidget {
+  const _PaletteStrip({required this.palette});
+  final List<PaletteColor> palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = palette.take(6).toList();
+    return Column(
+      children: [
+        const Text(
+          'OUTFIT PALETTE',
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+            color: AppColors.inkMuted,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final c in shown)
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: c.color,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.line),
+                      boxShadow: [
+                        BoxShadow(
+                          color: c.color.withValues(alpha: 0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  SizedBox(
+                    width: 48,
+                    child: Text(
+                      c.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        color: AppColors.inkMuted,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

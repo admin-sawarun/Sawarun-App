@@ -19,6 +19,12 @@ import {
 } from '../controllers/admin.controller.js';
 import { listReports, resolveReport } from '../controllers/reports.controller.js';
 import {
+  adminListTrendingFashion,
+  createTrendingFashion,
+  updateTrendingFashion,
+  deleteTrendingFashion,
+} from '../controllers/trendingFashion.controller.js';
+import {
   listPosts,
   deletePost,
   listAnalyses,
@@ -48,6 +54,12 @@ router.post('/brands/:id/decision', decideBrand);
 router.patch('/products/:id/visibility', setProductVisibility);
 router.patch('/products/:id/approval', setProductApproval);
 router.put('/featured-brand', setFeaturedBrand);
+
+// Trending Fashion (CR-1) — admin-curated feed with affiliate links.
+router.get('/trending-fashion', adminListTrendingFashion);
+router.post('/trending-fashion', createTrendingFashion);
+router.patch('/trending-fashion/:id', updateTrendingFashion);
+router.delete('/trending-fashion/:id', deleteTrendingFashion);
 
 router.get('/fit-weights', getFitWeights);
 router.put('/fit-weights', updateFitWeights);

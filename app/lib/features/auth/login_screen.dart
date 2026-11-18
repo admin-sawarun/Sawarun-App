@@ -58,13 +58,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 28),
               child: Column(
                 children: [
-                  const Spacer(flex: 3),
-                  Image.asset(AppAssets.logoMark, height: 52),
-                  const SizedBox(height: 36),
+                  const Spacer(flex: 2),
+                  Image.asset(AppAssets.logoMark, height: 72),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'SAVARUN',
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 3,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'AI Fashion & Style',
+                    style: TextStyle(
+                      fontSize: 14,
+                      letterSpacing: 0.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 34),
                   const Text(
                     'Welcome Back! 👋',
                     style: TextStyle(
-                      fontSize: 26,
+                      fontSize: 24,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),

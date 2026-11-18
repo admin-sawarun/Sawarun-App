@@ -32,6 +32,23 @@ const VisionSchema = z.object({
       .default([]),
     styleTips: z.array(z.string()).default([]),
   }),
+  // Alternative outfit ideas the app matches against the user's own wardrobe.
+  combinations: z
+    .array(
+      z.object({
+        title: z.string().default(''),
+        pieces: z
+          .array(
+            z.object({
+              category: z.string().default(''),
+              color: z.string().default(''),
+              note: z.string().default(''),
+            })
+          )
+          .default([]),
+      })
+    )
+    .default([]),
 });
 
 export function validateVisionResult(raw) {

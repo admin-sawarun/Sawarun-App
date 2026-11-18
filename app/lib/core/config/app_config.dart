@@ -34,6 +34,10 @@ class AppConfig {
       '$backendBaseUrl/api/affiliate/products';
   static const String affiliateTrendingEndpoint =
       '$backendBaseUrl/api/affiliate/trending';
+  static const String trendingFashionEndpoint =
+      '$backendBaseUrl/api/affiliate/trending-fashion';
+  static const String trendingFashionClickEndpoint =
+      '$backendBaseUrl/api/affiliate/trending-fashion/click';
   static const String affiliateFeaturedEndpoint =
       '$backendBaseUrl/api/affiliate/featured';
   static const String affiliateClickEndpoint =

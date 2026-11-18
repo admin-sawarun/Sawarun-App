@@ -47,6 +47,7 @@ export const analyzeOutfit = asyncHandler(async (req, res) => {
     styleDna,
     detection: vision.detection,
     feedback: vision.feedback,
+    combinations: vision.combinations,
     imageUrl,
     createdAt: new Date().toISOString(),
   };

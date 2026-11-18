@@ -12,7 +12,7 @@ import { tagClothingImage } from '../services/openaiVision.service.js';
 export const autoTagItem = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest('No image file provided (field "image")');
 
-  // Groq can't reach our localhost, so send the image inline as a data URL.
+  // OpenAI can't reach our localhost, so send the image inline as a data URL.
   const base64 = readFileSync(req.file.path).toString('base64');
   const dataUrl = `data:${req.file.mimetype || 'image/jpeg'};base64,${base64}`;
 
